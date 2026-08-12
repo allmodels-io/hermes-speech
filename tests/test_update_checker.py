@@ -42,7 +42,7 @@ def plugin_dir(tmp_path: Path, version: str = "0.1.0") -> Path:
 
 
 def test_explicit_check_uses_stable_release_and_sends_no_user_data(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -53,7 +53,9 @@ def test_explicit_check_uses_stable_release_and_sends_no_user_data(
         captured["kwargs"] = kwargs
         return FakeResponse()
 
-    checker = PluginUpdateChecker(plugin_dir=plugin_dir(tmp_path), request=request)
+    checker = PluginUpdateChecker(
+        plugin_dir=plugin_dir(tmp_path), request=request, **update_checker_paths
+    )
     result = checker.check_now()
 
     assert result["update_available"] is True
@@ -68,7 +70,7 @@ def test_explicit_check_uses_stable_release_and_sends_no_user_data(
 
 
 def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -90,6 +92,7 @@ def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
         clock=lambda: now[0],
         check_interval=100,
         reminder_interval=700,
+        **update_checker_paths,
     )
     checker.start_background_check()
     checker.start_background_check()
@@ -110,10 +113,14 @@ def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
     now[0] += 701
     reminder = checker.maybe_notification()
     assert reminder["latest_version"] == "0.2.0"
+    thread = checker._refresh_thread
+    if thread is not None:
+        thread.join(2)
+    assert checker._refresh_thread is None
 
 
 def test_failed_background_attempt_is_cached_for_the_check_interval(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -130,6 +137,7 @@ def test_failed_background_attempt_is_cached_for_the_check_interval(
         request=request,
         clock=lambda: now[0],
         check_interval=100,
+        **update_checker_paths,
     )
     checker.start_background_check()
     thread = checker._refresh_thread
@@ -147,7 +155,7 @@ def test_failed_background_attempt_is_cached_for_the_check_interval(
 
 
 def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_cli.config import save_config
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
@@ -163,7 +171,9 @@ def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
         {"plugins": {"hermes-speech": {"update_check": False}}},
         strip_defaults=False,
     )
-    checker = PluginUpdateChecker(plugin_dir=plugin_dir(tmp_path), request=request)
+    checker = PluginUpdateChecker(
+        plugin_dir=plugin_dir(tmp_path), request=request, **update_checker_paths
+    )
     checker.start_background_check()
     assert checker.maybe_notification() is None
     assert calls == 0
@@ -172,7 +182,7 @@ def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
 
 
 def test_explicit_update_reports_restart_and_uses_injected_updater(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -187,6 +197,7 @@ def test_explicit_update_reports_restart_and_uses_injected_updater(
         plugin_dir=plugin_dir(tmp_path),
         request=lambda *_args, **_kwargs: FakeResponse(),
         updater=updater,
+        **update_checker_paths,
     )
     result = checker.update_now()
     assert result == {
@@ -201,7 +212,7 @@ def test_explicit_update_reports_restart_and_uses_injected_updater(
 
 
 def test_linked_development_install_is_never_modified(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -212,6 +223,7 @@ def test_linked_development_install_is_never_modified(
     checker = PluginUpdateChecker(
         plugin_dir=source,
         request=lambda *_args, **_kwargs: FakeResponse(),
+        **update_checker_paths,
     )
     result = checker.update_now()
     assert result["success"] is False
@@ -219,13 +231,14 @@ def test_linked_development_install_is_never_modified(
 
 
 def test_json_decoration_never_overwrites_tool_result(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
     checker = PluginUpdateChecker(
         plugin_dir=plugin_dir(tmp_path),
         request=lambda *_args, **_kwargs: FakeResponse(),
+        **update_checker_paths,
     )
     checker.check_now()
     payload = json.loads(checker.decorate_json('{"success":true,"balance":"2.00"}'))
@@ -235,7 +248,7 @@ def test_json_decoration_never_overwrites_tool_result(
 
 
 def test_explicit_update_uses_hermes_real_git_updater(
-    speech_pkg, hermes_home, tmp_path
+    speech_pkg, hermes_home, update_checker_paths, tmp_path
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -277,6 +290,7 @@ def test_explicit_update_uses_hermes_real_git_updater(
     checker = PluginUpdateChecker(
         plugin_dir=target,
         request=lambda *_args, **_kwargs: FakeResponse(),
+        **update_checker_paths,
     )
     checker._official_remote = lambda _remote: True
     result = checker.update_now()

@@ -1,5 +1,5 @@
 name: hermes-speech
-version: 0.1.0
+version: 0.1.1
 description: "Conversational and slash-command AllModels TTS/STT setup with native Hermes speech providers."
 author: AllModels
 kind: standalone

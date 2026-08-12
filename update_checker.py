@@ -60,6 +60,8 @@ class PluginUpdateChecker:
         self,
         *,
         plugin_dir: Optional[Path] = None,
+        cache_path: Optional[Path] = None,
+        installed_path: Optional[Path] = None,
         request: Optional[Callable[..., Any]] = None,
         clock: Callable[[], float] = time.time,
         check_interval: float = CHECK_INTERVAL_SECONDS,
@@ -67,6 +69,8 @@ class PluginUpdateChecker:
         updater: Optional[Callable[[], Dict[str, Any]]] = None,
     ) -> None:
         self.plugin_dir = (plugin_dir or Path(__file__).resolve().parent).resolve()
+        self._cache_path_override = cache_path
+        self._installed_path_override = installed_path
         self._request = request or httpx.get
         self._clock = clock
         self.check_interval = check_interval
@@ -81,14 +85,16 @@ class PluginUpdateChecker:
     def current_version(self) -> str:
         return _manifest_version(self.plugin_dir / "plugin.yaml")
 
-    @staticmethod
-    def _cache_path() -> Path:
+    def _cache_path(self) -> Path:
+        if self._cache_path_override is not None:
+            return self._cache_path_override
         from hermes_constants import get_hermes_home
 
         return get_hermes_home() / "cache" / "hermes-speech" / "update.json"
 
-    @staticmethod
-    def _installed_path() -> Path:
+    def _installed_path(self) -> Path:
+        if self._installed_path_override is not None:
+            return self._installed_path_override
         from hermes_constants import get_hermes_home
 
         return get_hermes_home() / "plugins" / PLUGIN_NAME

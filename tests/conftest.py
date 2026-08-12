@@ -48,6 +48,15 @@ def hermes_home(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def update_checker_paths(hermes_home):
+    """Keep update-checker state inside the test home, even across threads."""
+    return {
+        "cache_path": hermes_home / "cache" / "hermes-speech" / "update.json",
+        "installed_path": hermes_home / "plugins" / "hermes-speech",
+    }
+
+
+@pytest.fixture
 def sample_models():
     return {
         "tts": [
