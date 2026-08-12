@@ -1,9 +1,19 @@
-# Hermes Speech
+<p align="center">
+  <a href="https://allmodels.io">
+    <img src="https://allmodels.io/assets/providers/allmodels-mark.png" alt="AllModels" width="112">
+  </a>
+</p>
+
+<h1 align="center">Hermes Speech</h1>
+
+<p align="center">
+  Native AllModels speech for Hermes Agent
+</p>
 
 `hermes-speech` is a native [Hermes Agent](https://github.com/NousResearch/hermes-agent)
-plugin for AllModels TTS and STT. It registers `allmodels` as a Hermes text-to-speech
-and transcription provider, adds a guided `/speech` command, and bundles an
-agent-facing setup tool and skill.
+plugin for [allmodels.io](https://allmodels.io) TTS and STT. It registers `allmodels`
+as a Hermes text-to-speech and transcription provider, adds a guided `/speech`
+command, and bundles an agent-facing setup tool and skill.
 
 The plugin exposes two normal Hermes skills:
 
