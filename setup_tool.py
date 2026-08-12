@@ -10,6 +10,7 @@ from . import settings
 from .catalog import CatalogStore, compatible_voices, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import _eligible_models
+from .update_checker import PluginUpdateChecker
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _CODE_RE = re.compile(r"^\d{6}$")
@@ -78,11 +79,23 @@ def _preferred_model(models: list[Dict[str, Any]], preferred: tuple[str, ...]) -
 class AllModelsSpeechSetupTool:
     """State-light setup workflow suitable for every Hermes surface."""
 
-    def __init__(self, client: AllModelsClient, catalog: CatalogStore) -> None:
+    def __init__(
+        self,
+        client: AllModelsClient,
+        catalog: CatalogStore,
+        update_checker: Optional[PluginUpdateChecker] = None,
+    ) -> None:
         self.client = client
         self.catalog = catalog
+        self.update_checker = update_checker
 
     def handle(self, args: dict, **_: Any) -> str:
+        result = self._handle(args)
+        if self.update_checker is not None:
+            return self.update_checker.decorate_json(result)
+        return result
+
+    def _handle(self, args: dict) -> str:
         action = str(args.get("action") or "status").strip().lower()
         try:
             if action == "status":

@@ -15,6 +15,7 @@ from . import settings
 from .catalog import CatalogStore, compatible_voices, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
+from .update_checker import PluginUpdateChecker
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
@@ -40,10 +41,12 @@ class SpeechCommand:
         client: AllModelsClient,
         catalog: CatalogStore,
         tts_provider: AllModelsTTSProvider,
+        update_checker: Optional[PluginUpdateChecker] = None,
     ) -> None:
         self.client = client
         self.catalog = catalog
         self.tts_provider = tts_provider
+        self.update_checker = update_checker
         self._state_lock = threading.RLock()
         self._pending_signups: Dict[Tuple[str, ...], _PendingSignup] = {}
         self._menus: Dict[Tuple[Tuple[str, ...], str], _MenuSnapshot] = {}
@@ -114,6 +117,22 @@ class SpeechCommand:
         return "\n".join(lines)
 
     def handle(self, raw_args: str) -> str:
+        parts = self._split(raw_args.strip())
+        if parts and parts[0].lower() in {"update", "6"}:
+            if self.update_checker is None:
+                return "Hermes Speech update support is unavailable in this process. Restart Hermes."
+            if len(parts) > 1 and parts[1].lower() == "check":
+                return self.update_checker.format_check()
+            if len(parts) > 1:
+                return "Use `/speech update` to install, or `/speech update check` to check only."
+            return self.update_checker.format_update()
+
+        result = self._handle(raw_args)
+        if self.update_checker is not None:
+            return self.update_checker.decorate_text(result)
+        return result
+
+    def _handle(self, raw_args: str) -> str:
         identity = self._identity()
         self._clean_expired(identity)
         parts = self._split(raw_args.strip())
@@ -263,13 +282,21 @@ class SpeechCommand:
                 "3. Account — `/speech account`",
                 "4. Test TTS — `/speech test <text>`",
                 "5. Advanced — `/speech advanced`",
+                "6. Update plugin — `/speech update`",
             ]
         )
         return "\n".join(lines)
 
     @staticmethod
     def _expand_numeric_route(parts: List[str]) -> List[str]:
-        root = {"1": "tts", "2": "stt", "3": "account", "4": "test", "5": "advanced"}
+        root = {
+            "1": "tts",
+            "2": "stt",
+            "3": "account",
+            "4": "test",
+            "5": "advanced",
+            "6": "update",
+        }
         result = list(parts)
         result[0] = root.get(result[0], result[0])
         if len(result) > 1:

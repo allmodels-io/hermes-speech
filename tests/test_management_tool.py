@@ -31,6 +31,37 @@ def test_management_requires_existing_account(
     assert result["next_action"] == "load_configure_allmodels_speech"
 
 
+def test_update_actions_do_not_require_allmodels_account(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
+    class Updates:
+        @staticmethod
+        def check_now():
+            return {
+                "success": True,
+                "current_version": "0.1.0",
+                "latest_version": "0.2.0",
+                "update_available": True,
+            }
+
+        @staticmethod
+        def update_now():
+            return {
+                "success": True,
+                "updated": True,
+                "previous_version": "0.1.0",
+                "installed_version": "0.2.0",
+                "restart_required": True,
+            }
+
+    tool, _ = make_tool(speech_pkg, sample_models, sample_voices, key="")
+    tool.update_checker = Updates()
+    assert call(tool, "check_update")["update_available"] is True
+    updated = call(tool, "update_plugin")
+    assert updated["installed_version"] == "0.2.0"
+    assert updated["restart_required"] is True
+
+
 def test_status_uses_human_readable_voice_name(
     speech_pkg, hermes_home, sample_models, sample_voices
 ):

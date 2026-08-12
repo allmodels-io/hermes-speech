@@ -12,6 +12,7 @@ from . import settings
 from .catalog import CatalogStore, compatible_voices, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
+from .update_checker import PluginUpdateChecker
 
 _LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 _RESULT_LIMIT = 10
@@ -23,7 +24,8 @@ MANAGEMENT_TOOL_SCHEMA = {
         "Manage an existing AllModels speech account and Hermes TTS/STT configuration. "
         "Use for status, model discovery and selection, compatible voice search and "
         "selection, non-mutating one-off voice previews, balance, top-up links, configured "
-        "TTS tests, speed, language, and transcription prompts. This tool cannot sign up or "
+        "TTS tests, speed, language, transcription prompts, and plugin update checks or "
+        "installation. This tool cannot sign up or "
         "verify accounts; use allmodels_speech_setup for first-time setup. Load "
         "manage-allmodels-speech with skill_view for the workflow."
     ),
@@ -46,8 +48,13 @@ MANAGEMENT_TOOL_SCHEMA = {
                     "set_speed",
                     "set_language",
                     "set_prompt",
+                    "check_update",
+                    "update_plugin",
                 ],
-                "description": "The authenticated speech-management operation to perform.",
+                "description": (
+                    "The speech-management operation to perform. update_plugin requires an "
+                    "explicit user request and does not require an AllModels account."
+                ),
             },
             "capability": {
                 "type": "string",
@@ -169,12 +176,31 @@ class AllModelsSpeechManagementTool:
         client: AllModelsClient,
         catalog: CatalogStore,
         tts_provider: AllModelsTTSProvider,
+        update_checker: Optional[PluginUpdateChecker] = None,
     ) -> None:
         self.client = client
         self.catalog = catalog
         self.tts_provider = tts_provider
+        self.update_checker = update_checker
 
     def handle(self, args: dict, **_: Any) -> str:
+        action = str(args.get("action") or "get_status").strip().lower()
+        if action in {"check_update", "update_plugin"}:
+            if self.update_checker is None:
+                return _result(success=False, error="update_support_unavailable")
+            result = (
+                self.update_checker.check_now()
+                if action == "check_update"
+                else self.update_checker.update_now()
+            )
+            return _result(**result)
+
+        result = self._handle(args)
+        if self.update_checker is not None:
+            return self.update_checker.decorate_json(result)
+        return result
+
+    def _handle(self, args: dict) -> str:
         action = str(args.get("action") or "get_status").strip().lower()
         if not self.client.get_api_key():
             return _result(

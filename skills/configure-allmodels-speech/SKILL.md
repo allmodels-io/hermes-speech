@@ -26,6 +26,7 @@ Do not substitute terminal commands or another speech provider. If neither the d
 4. Verification saves the credential and configures balanced TTS, voice, and STT defaults automatically. If it returns `catalog_initializing`, retry `configure_defaults` once.
 5. If status says the account is authenticated but setup is incomplete, call `configure_defaults` without asking more questions.
 6. When `next_action` is `done`, summarize the selected TTS model, human-readable voice name, and STT model. Never show the stored voice ID unless the user explicitly requests technical details. Tell the user that `/voice on` and `/voice tts` enable Hermes' normal spoken-reply pipeline.
+7. If a tool result contains `plugin_update`, mention it briefly after completing the current setup step. Never interrupt an email or verification-code request with the notice, and never install an update without an explicit user request.
 
 ## Guardrails
 

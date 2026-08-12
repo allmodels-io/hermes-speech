@@ -93,6 +93,8 @@ Useful direct commands:
 /speech advanced speed 1.1
 /speech advanced language ja
 /speech advanced prompt Product names: Hermes, AllModels
+/speech update check
+/speech update
 ```
 
 `/voice` remains the Hermes command for enabling or disabling voice mode.
@@ -119,3 +121,20 @@ in `config.yaml`. The API key is stored in the profile's protected `.env` as
 
 Catalogs refresh automatically in the background. There is no manual refresh
 command.
+
+Hermes Speech checks the repository's latest stable GitHub Release in the
+background when `/speech` or an agent-facing plugin tool is used. The result is
+cached for 24 hours and an available release is mentioned at most weekly until
+installed. The checker sends no account, speech, model, voice, or installation
+identifier data. Disable automatic checks with:
+
+```yaml
+plugins:
+  hermes-speech:
+    update_check: false
+```
+
+Automatic checks only notify. `/speech update` or an explicit conversational
+request such as `Update Hermes Speech` performs the update and then asks for a
+Hermes restart. Linked development installs, non-Git copies, unexpected Git
+remotes, and checkouts with local changes are never modified automatically.

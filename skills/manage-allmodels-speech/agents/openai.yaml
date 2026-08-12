@@ -1,4 +1,4 @@
 interface:
   display_name: "Manage AllModels Speech"
-  short_description: "Manage models, voices, previews, balance, and tuning"
-  default_prompt: "Use $manage-allmodels-speech to manage or preview my existing AllModels speech configuration."
+  short_description: "Manage models, voices, billing, tuning, and updates"
+  default_prompt: "Use $manage-allmodels-speech to manage or update my existing AllModels speech configuration."

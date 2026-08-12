@@ -19,6 +19,7 @@ def register(ctx) -> None:
     from .skill_discovery import ensure_skill_discovery
     from .setup_tool import SETUP_TOOL_SCHEMA, AllModelsSpeechSetupTool
     from .streaming import register_allmodels_streaming_provider
+    from .update_checker import PluginUpdateChecker
 
     ensure_skill_discovery(Path(__file__).resolve().parent / "skills")
 
@@ -26,10 +27,16 @@ def register(ctx) -> None:
     catalog = CatalogStore(client)
     tts = AllModelsTTSProvider(client, catalog)
     stt = AllModelsTranscriptionProvider(client, catalog)
+    updates = PluginUpdateChecker()
     register_allmodels_streaming_provider(client, catalog)
-    command = SpeechCommand(client, catalog, tts)
-    setup_tool = AllModelsSpeechSetupTool(client, catalog)
-    management_tool = AllModelsSpeechManagementTool(client, catalog, tts)
+    command = SpeechCommand(client, catalog, tts, update_checker=updates)
+    setup_tool = AllModelsSpeechSetupTool(client, catalog, update_checker=updates)
+    management_tool = AllModelsSpeechManagementTool(
+        client,
+        catalog,
+        tts,
+        update_checker=updates,
+    )
 
     ctx.register_tts_provider(tts)
     ctx.register_transcription_provider(stt)

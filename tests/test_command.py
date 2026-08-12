@@ -215,6 +215,29 @@ def test_numeric_root_navigation(speech_pkg, hermes_home, sample_models, sample_
     assert "Advanced speech tuning" in command.handle("5")
 
 
+def test_update_commands_do_not_require_allmodels_account(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
+    class Updates:
+        @staticmethod
+        def format_check():
+            return "Hermes Speech 0.2.0 is available"
+
+        @staticmethod
+        def format_update():
+            return "Updated Hermes Speech from 0.1.0 to 0.2.0"
+
+        @staticmethod
+        def decorate_text(result):
+            return result
+
+    command, _ = make_command(speech_pkg, sample_models, sample_voices, key="")
+    command.update_checker = Updates()
+    assert "0.2.0 is available" in command.handle("update check")
+    assert "Updated Hermes Speech" in command.handle("update")
+    assert "Updated Hermes Speech" in command.handle("6")
+
+
 def test_tts_test_returns_media_directive(
     speech_pkg, hermes_home, sample_models, sample_voices, tmp_path
 ):
