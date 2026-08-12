@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure AllModels Speech"
+  short_description: "Set up AllModels speech with guided defaults"
+  default_prompt: "Use $configure-allmodels-speech to set up AllModels TTS and STT for me."
