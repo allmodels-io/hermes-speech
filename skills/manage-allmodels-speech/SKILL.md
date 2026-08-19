@@ -42,6 +42,7 @@ Do not substitute generic `text_to_speech`, terminal configuration edits, Edge, 
 
 - Call `find_voices` with no query to list voices for the active TTS model. Pass `model_id` to inspect a different model without selecting it. Pass descriptive terms as `query` without a model to search names, descriptions, language, gender, provider, and IDs across all synchronous TTS models; use each result's `compatible_models` for selection or preview.
 - Present human-readable names and useful descriptions, language, gender, or provider. Do not show opaque voice IDs unless requested for technical details.
+- After presenting voice candidates, explicitly ask whether the user would like to hear a sample of any of them. Make clear that they can name one or more voices to preview and that previewing does not change their saved TTS configuration.
 - Call `select_voice` with the exact ID and provider returned by `find_voices`. Report the human-readable selected name.
 - For a one-off sample, call `preview_voice` with text and an exact compatible model ID, voice ID, and provider returned by `find_voices`. Include its `media_directive` exactly. State that it was a preview and do not claim the saved TTS model or voice changed.
 - If the active model changes and its previous voice is cleared, tell the user and help select a compatible replacement.

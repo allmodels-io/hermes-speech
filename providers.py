@@ -25,7 +25,9 @@ def _safe_exception(exc: BaseException, api_key: str) -> str:
     return message[:800]
 
 
-def _eligible_models(catalog: Optional[Dict[str, Any]], capability: str) -> List[Dict[str, Any]]:
+def _eligible_models(
+    catalog: Optional[Dict[str, Any]], capability: str
+) -> List[Dict[str, Any]]:
     if not catalog:
         return []
     models = catalog.get("models", {}).get(capability, [])
@@ -102,25 +104,24 @@ class AllModelsTTSProvider(TTSProvider):
 
     def list_voices(self) -> List[Dict[str, Any]]:
         catalog = self.catalog.cached() or {}
-        groups = catalog.get("voices")
+        voices = catalog.get("voice_entries")
         result: List[Dict[str, Any]] = []
-        if not isinstance(groups, dict):
+        if not isinstance(voices, list):
             return result
-        for provider, group in groups.items():
-            voices = group.get("voices") if isinstance(group, dict) else None
-            for voice in voices if isinstance(voices, list) else []:
-                if not isinstance(voice, dict) or not voice.get("id"):
-                    continue
-                name = str(voice.get("name") or voice["id"])
-                result.append(
-                    {
-                        "id": str(voice["id"]),
-                        "display": f"{name} — {provider}",
-                        "language": voice.get("language"),
-                        "gender": voice.get("gender"),
-                        "provider": provider,
-                    }
-                )
+        for voice in voices:
+            if not isinstance(voice, dict) or not voice.get("id"):
+                continue
+            name = str(voice.get("name") or voice["id"])
+            provider = str(voice.get("provider") or "")
+            result.append(
+                {
+                    "id": str(voice["id"]),
+                    "display": f"{name} — {provider}",
+                    "language": voice.get("language"),
+                    "gender": voice.get("gender"),
+                    "provider": provider,
+                }
+            )
         return result
 
     def default_model(self) -> Optional[str]:
@@ -147,7 +148,9 @@ class AllModelsTTSProvider(TTSProvider):
         selected_model = (model or status.get("tts_model") or "").strip()
         selected_voice = (voice or status.get("tts_voice") or "").strip()
         if not selected_model:
-            raise RuntimeError("No AllModels TTS model is selected. Run /speech tts model.")
+            raise RuntimeError(
+                "No AllModels TTS model is selected. Run /speech tts model."
+            )
         if not selected_voice:
             raise RuntimeError("No AllModels voice is selected. Run /speech tts voice.")
 
@@ -162,11 +165,12 @@ class AllModelsTTSProvider(TTSProvider):
 
         from openai import OpenAI
 
-        client = OpenAI(api_key=key, base_url=OPENAI_BASE_URL, timeout=60, max_retries=0)
+        client = OpenAI(
+            api_key=key, base_url=OPENAI_BASE_URL, timeout=60, max_retries=0
+        )
         started = time.monotonic()
         logger.info(
-            "AllModels TTS path: synchronous file "
-            "(model=%s, provider=%s, format=%s)",
+            "AllModels TTS path: synchronous file (model=%s, provider=%s, format=%s)",
             selected_model,
             selected_provider or "auto",
             response_format,
@@ -211,7 +215,9 @@ class AllModelsTTSProvider(TTSProvider):
                 time.monotonic() - started,
                 exc.__class__.__name__,
             )
-            raise RuntimeError(f"AllModels TTS failed: {_safe_exception(exc, key)}") from exc
+            raise RuntimeError(
+                f"AllModels TTS failed: {_safe_exception(exc, key)}"
+            ) from exc
         finally:
             close = getattr(client, "close", None)
             if callable(close):
@@ -288,14 +294,19 @@ class AllModelsTranscriptionProvider(TranscriptionProvider):
 
         from openai import OpenAI
 
-        client = OpenAI(api_key=key, base_url=OPENAI_BASE_URL, timeout=60, max_retries=0)
+        client = OpenAI(
+            api_key=key, base_url=OPENAI_BASE_URL, timeout=60, max_retries=0
+        )
         started = time.monotonic()
         logger.info(
             "AllModels STT path: synchronous file upload (model=%s)",
             selected_model,
         )
         try:
-            kwargs: Dict[str, Any] = {"model": selected_model, "response_format": "json"}
+            kwargs: Dict[str, Any] = {
+                "model": selected_model,
+                "response_format": "json",
+            }
             if language:
                 kwargs["language"] = language
             prompt = status.get("stt_prompt")

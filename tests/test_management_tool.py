@@ -122,9 +122,12 @@ def test_voice_search_selection_and_incompatible_rejection(
 ):
     from hermes_speech_testpkg import settings
 
-    sample_voices["fish"]["voices"][0]["description"] = (
-        "Deep confident public-speaking voice"
+    fish_voice = next(
+        row
+        for row in sample_voices
+        if row["voice"]["id"] == "03397b4c4be74759b72533b663fbd001"
     )
+    fish_voice["voice"]["description"] = "Deep confident public-speaking voice"
     settings.set_tts_model("fish/s2-1-pro")
     tool, _ = make_tool(speech_pkg, sample_models, sample_voices)
 

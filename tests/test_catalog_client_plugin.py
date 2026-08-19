@@ -17,7 +17,7 @@ def test_catalog_persists_and_recovers_from_corrupt_cache(
         def list_models(self, api_key=""):
             return sample_models
 
-        def list_voices(self, api_key=""):
+        def list_voices(self, api_key="", **_kwargs):
             return {"voices": sample_voices}
 
     cache_path = hermes_home / "cache" / "hermes-speech" / "catalog.json"
@@ -26,7 +26,7 @@ def test_catalog_persists_and_recovers_from_corrupt_cache(
     store = CatalogStore(Client())
     catalog = store.ensure("key", cold_timeout=2)
     assert catalog["models"]["tts"][0]["id"].startswith("elevenlabs/")
-    assert json.loads(cache_path.read_text())["version"] == 1
+    assert json.loads(cache_path.read_text())["version"] == 2
 
 
 def test_catalog_keeps_stale_data_on_refresh_error(
@@ -39,7 +39,7 @@ def test_catalog_keeps_stale_data_on_refresh_error(
         def list_models(self, api_key=""):
             raise AllModelsAPIError("offline")
 
-        def list_voices(self, api_key=""):
+        def list_voices(self, api_key="", **_kwargs):
             raise AssertionError
 
     store = CatalogStore(Client())
@@ -64,7 +64,7 @@ def test_catalog_cold_fetch_is_bounded_and_concurrent_refreshes_coalesce(
             release.wait(2)
             return sample_models
 
-        def list_voices(self, api_key=""):
+        def list_voices(self, api_key="", **_kwargs):
             return {"voices": sample_voices}
 
     client = Client()
@@ -102,6 +102,96 @@ def test_client_maps_auth_errors_without_leaking_key(speech_pkg, monkeypatch):
         assert "super-secret" not in str(exc)
     else:
         raise AssertionError("expected AllModelsAPIError")
+
+
+def test_client_voice_search_uses_public_query_parameters(speech_pkg, monkeypatch):
+    from hermes_speech_testpkg.client import AllModelsClient
+
+    captured = {}
+
+    def request(method, url, **kwargs):
+        captured.update(method=method, url=url, kwargs=kwargs)
+        return httpx.Response(
+            200,
+            json={
+                "voices": [],
+                "facets": [],
+                "total_count": 0,
+                "has_more": False,
+                "next_cursor": None,
+                "catalogue_updated_at": "2026-08-18T00:00:00Z",
+            },
+        )
+
+    monkeypatch.setattr(httpx, "request", request)
+    AllModelsClient().list_voices(
+        query="british female",
+        model="elevenlabs/eleven-v3",
+        page_size=10,
+        include_facets=True,
+    )
+
+    assert captured["method"] == "GET"
+    assert captured["url"].endswith("/v1/voices")
+    assert captured["kwargs"]["params"] == {
+        "page_size": 10,
+        "q": "british female",
+        "model": "elevenlabs/eleven-v3",
+        "include_facets": "true",
+    }
+    assert "Authorization" not in captured["kwargs"]["headers"]
+
+
+def test_voice_search_normalizes_rich_rows_but_caches_only_compact_metadata(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
+    from hermes_speech_testpkg.catalog import CatalogStore
+    from hermes_speech_testpkg.client import AllModelsAPIError
+
+    sample_voices[0]["voice"]["labels"].append(
+        {
+            "facet": {"id": "accent", "name": "Accent"},
+            "value": {"id": "british", "name": "British"},
+        }
+    )
+
+    class Client:
+        offline = False
+
+        def list_models(self, api_key=""):
+            return sample_models
+
+        def list_voices(self, **_kwargs):
+            if self.offline:
+                raise AllModelsAPIError("offline")
+            return {
+                "voices": [sample_voices[0]],
+                "facets": [{"id": "label.gender", "name": "Gender", "values": []}],
+                "total_count": 1,
+                "has_more": False,
+                "next_cursor": None,
+                "catalogue_updated_at": "2026-08-18T00:00:00Z",
+            }
+
+    client = Client()
+    store = CatalogStore(client)
+    assert store.ensure("key", cold_timeout=2)
+    page = store.search_voices(query="Aria", page_size=10, include_facets=True)
+
+    assert page["voices"][0]["gender"] == "female"
+    assert page["voices"][0]["preview_url"].startswith("https://audio.example/")
+    assert page["voices"][0]["labels"]["gender"][0]["id"] == "female"
+    cached = store.cached()["voice_entries"][0]
+    assert cached["name"] == "Aria"
+    assert "preview_url" not in cached
+    assert "labels" not in cached
+    assert "metrics" not in cached
+    assert "British" in cached["keywords"]
+
+    client.offline = True
+    fallback = store.search_voices(query="british female", page_size=10)
+    assert fallback["stale"] is True
+    assert fallback["voices"][0]["name"] == "Aria"
 
 
 def test_plugin_registers_command_and_both_providers(speech_pkg, hermes_home):

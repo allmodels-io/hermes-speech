@@ -161,51 +161,85 @@ def sample_models():
 
 @pytest.fixture
 def sample_voices():
-    return {
-        "elevenlabs": {
-            "default": "voice-a",
-            "source": "live",
-            "voices": [
+    def row(
+        model,
+        voice_id,
+        name,
+        provider,
+        *,
+        description=None,
+        gender=None,
+        language=None,
+        default=False,
+    ):
+        labels = []
+        if gender:
+            labels.append(
                 {
-                    "id": "voice-a",
-                    "name": "Aria",
-                    "gender": "female",
-                    "models": ["eleven_turbo_v2_5"],
-                },
-                {"id": "voice-b", "name": "Brian", "models": ["eleven_multilingual_v2"]},
-            ],
-        },
-        "fal": {
-            "source": "static",
-            "voices": [{"id": "fal-voice", "name": "Fal Voice"}],
-        },
-        "openai": {
-            "default": "alloy",
-            "source": "static",
-            "voices": [
-                {"id": "alloy"},
-                {"id": "ballad", "models": ["gpt-4o-mini-tts"]},
-            ],
-        },
-        "fish": {
-            "source": "live",
-            "voices": [
+                    "facet": {"id": "gender", "name": "Gender"},
+                    "value": {"id": gender, "name": gender.title()},
+                }
+            )
+        return {
+            "model": {"id": model, "name": model},
+            "voice": {
+                "id": voice_id,
+                "name": name,
+                "description": description,
+                "category": {"id": "official", "name": "Official"},
+                "preview_url": f"https://audio.example/{voice_id}.mp3",
+                "languages": ([{"id": language, "name": language}] if language else []),
+                "labels": labels,
+                "source_urls": [],
+                "scope": {"type": "global"},
+                "first_seen_at": "2026-08-17T00:00:00Z",
+                "last_seen_at": "2026-08-18T00:00:00Z",
+            },
+            "providers": [
                 {
-                    "id": "03397b4c4be74759b72533b663fbd001",
-                    "name": "Elon Musk(Noise reduction)",
-                    "language": "en",
-                },
-                {"id": "another-fish-voice", "name": "Another Fish Voice"},
+                    "id": provider,
+                    "name": provider.title(),
+                    "default": default,
+                    "provider_model_id": model.partition("/")[2],
+                    "metrics": None,
+                }
             ],
-        },
-    }
+        }
+
+    return [
+        row(
+            "elevenlabs/eleven-turbo-v2-5",
+            "voice-a",
+            "Aria",
+            "elevenlabs",
+            gender="female",
+            language="en",
+            default=True,
+        ),
+        row("elevenlabs/eleven-multilingual-v2", "voice-b", "Brian", "elevenlabs"),
+        row("elevenlabs/eleven-turbo-v2-5", "fal-voice", "Fal Voice", "fal"),
+        row("openai/gpt-4o-mini-tts", "alloy", "alloy", "openai", default=True),
+        row("openai/gpt-4o-mini-tts", "ballad", "ballad", "openai"),
+        row(
+            "fish/s2-1-pro",
+            "03397b4c4be74759b72533b663fbd001",
+            "Elon Musk(Noise reduction)",
+            "fish",
+            language="en",
+        ),
+        row("fish/s2-1-pro", "another-fish-voice", "Another Fish Voice", "fish"),
+    ]
 
 
 @pytest.fixture
-def sample_catalog(sample_models, sample_voices):
+def sample_catalog(speech_pkg, sample_models, sample_voices):
+    from hermes_speech_testpkg.catalog import _normalize_voice_entry
+
     return {
-        "version": 1,
+        "version": 2,
         "fetched_at": 1.0,
         "models": sample_models,
-        "voices": sample_voices,
+        "voice_entries": [
+            voice for row in sample_voices for voice in _normalize_voice_entry(row)
+        ],
     }

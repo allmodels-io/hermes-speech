@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional, Sequence
 
 from . import settings
-from .catalog import CatalogStore, compatible_voices, voice_display_name
+from .catalog import CatalogStore, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
 from .update_checker import PluginUpdateChecker
@@ -121,11 +121,25 @@ def _result(**payload: Any) -> str:
 
 
 def _public_voice(voice: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    result = {
         key: voice.get(key)
-        for key in ("id", "name", "provider", "language", "gender", "description")
+        for key in (
+            "id",
+            "name",
+            "provider",
+            "provider_name",
+            "language",
+            "gender",
+            "description",
+            "category",
+            "preview_url",
+            "labels",
+            "metrics",
+        )
         if voice.get(key) not in (None, "")
     }
+    result["compatible_models"] = list(voice.get("models") or [])
+    return result
 
 
 def _model_search_text(model: Dict[str, Any], query: str) -> bool:
@@ -135,22 +149,6 @@ def _model_search_text(model: Dict[str, Any], query: str) -> bool:
     if isinstance(aliases, list):
         values.extend(str(alias) for alias in aliases)
     return all(term in " ".join(values).lower() for term in needle.split())
-
-
-def _voice_search_text(voice: Dict[str, Any], query: str) -> bool:
-    values = [
-        voice.get("id"),
-        voice.get("name"),
-        voice.get("provider"),
-        voice.get("language"),
-        voice.get("gender"),
-        voice.get("description"),
-    ]
-    models = voice.get("models")
-    if isinstance(models, list):
-        values.extend(models)
-    haystack = " ".join(str(value) for value in values if value).lower()
-    return all(term in haystack for term in query.lower().split())
 
 
 def _exact_model(
@@ -295,6 +293,12 @@ class AllModelsSpeechManagementTool:
         voice_name = (
             voice_display_name(catalog, voice_id, provider) if catalog else None
         )
+        if not voice_name and voice_id and status.get("tts_model"):
+            resolved = self.catalog.find_voice(
+                str(status["tts_model"]), voice_id, provider
+            )
+            if resolved is not None:
+                voice_name = str(resolved.get("name") or "") or None
         return _result(
             success=True,
             authenticated=True,
@@ -421,11 +425,11 @@ class AllModelsSpeechManagementTool:
         status = settings.speech_status()
         current_voice = str(status.get("tts_voice") or "")
         current_provider = str(status.get("tts_voice_provider") or "")
-        voices = compatible_voices(catalog, model)
-        keep_voice = any(
-            voice["id"] == current_voice
-            and (not current_provider or voice["provider"] == current_provider)
-            for voice in voices
+        page = self.catalog.search_voices(model_id=canonical, page_size=_RESULT_LIMIT)
+        voices = page["voices"]
+        keep_voice = bool(
+            current_voice
+            and self.catalog.find_voice(canonical, current_voice, current_provider)
         )
         cleared = bool(current_voice and not keep_voice)
         settings.set_tts_model(canonical, clear_voice=cleared)
@@ -437,7 +441,7 @@ class AllModelsSpeechManagementTool:
             compatible_voices=[
                 _public_voice(voice) for voice in voices[:_RESULT_LIMIT]
             ],
-            more_voices_available=len(voices) > _RESULT_LIMIT,
+            more_voices_available=page["has_more"],
             next_action="select_voice" if voices else None,
         )
 
@@ -476,41 +480,35 @@ class AllModelsSpeechManagementTool:
                 ),
             )
         canonical = str(model.get("id") or "")
-        return canonical, compatible_voices(catalog, model), None
+        page = self.catalog.search_voices(model_id=canonical, page_size=_RESULT_LIMIT)
+        return canonical, page["voices"], None
 
-    def _voices_across_models(
-        self, query: str
-    ) -> tuple[Optional[list[Dict[str, Any]]], Optional[str]]:
-        catalog, error = self._catalog_or_error()
-        if error:
-            return None, error
-        assert catalog is not None
-        merged: Dict[tuple[str, str], Dict[str, Any]] = {}
-        for model in _eligible_models(catalog, "tts"):
-            model_id = str(model.get("id") or "")
-            for voice in compatible_voices(catalog, model):
-                if query and not _voice_search_text(voice, query):
-                    continue
+    def _find_voices(self, args: Dict[str, Any]) -> str:
+        query = str(args.get("query") or "").strip()
+        requested_model = str(args.get("model_id") or "").strip()
+        scope = "all_models" if query and not requested_model else "model"
+        more_available = False
+        if scope == "all_models":
+            # The API returns one row per model/voice/provider combination.
+            # Fetch enough ranked rows to present ten distinct voices rather
+            # than ten copies of the same voice across compatible models.
+            page = self.catalog.search_voices(query=query, page_size=100)
+            merged: Dict[tuple[str, str], Dict[str, Any]] = {}
+            for voice in page["voices"]:
                 key = (str(voice.get("provider") or ""), str(voice.get("id") or ""))
                 existing = merged.get(key)
                 if existing is None:
                     existing = dict(voice)
                     existing["compatible_models"] = []
                     merged[key] = existing
-                models = existing["compatible_models"]
-                if model_id and model_id not in models:
-                    models.append(model_id)
-        return list(merged.values()), None
-
-    def _find_voices(self, args: Dict[str, Any]) -> str:
-        query = str(args.get("query") or "").strip()
-        requested_model = str(args.get("model_id") or "").strip()
-        scope = "all_models" if query and not requested_model else "model"
-        if scope == "all_models":
-            matches, error = self._voices_across_models(query)
-            if error:
-                return error
-            assert matches is not None
+                compatible_model = str(voice.get("model") or "")
+                if (
+                    compatible_model
+                    and compatible_model not in existing["compatible_models"]
+                ):
+                    existing["compatible_models"].append(compatible_model)
+            matches = list(merged.values())
+            more_available = page["has_more"] or len(matches) > _RESULT_LIMIT
             model_id = None
         else:
             if requested_model:
@@ -520,11 +518,17 @@ class AllModelsSpeechManagementTool:
             if error:
                 return error
             assert voices is not None
-            matches = voices
             if query:
-                matches = [
-                    voice for voice in voices if _voice_search_text(voice, query)
-                ]
+                page = self.catalog.search_voices(
+                    model_id=model_id or "",
+                    query=query,
+                    page_size=_RESULT_LIMIT,
+                )
+                matches = page["voices"]
+                more_available = page["has_more"]
+            else:
+                matches = voices
+                more_available = len(voices) >= _RESULT_LIMIT
 
         results = []
         for voice in matches[:_RESULT_LIMIT]:
@@ -542,7 +546,7 @@ class AllModelsSpeechManagementTool:
             query=query or None,
             voices=results,
             result_limit=_RESULT_LIMIT,
-            more_available=len(matches) > _RESULT_LIMIT,
+            more_available=more_available,
             instruction=(
                 "Use select_voice to change the configured voice, or preview_voice with an "
                 "exact compatible model, voice id, and provider to listen without changing configuration."
@@ -558,15 +562,8 @@ class AllModelsSpeechManagementTool:
         provider = str(args.get("voice_provider") or "").strip()
         if not voice_id:
             return _result(success=False, error="voice_id_required")
-        matches = [
-            voice
-            for voice in voices
-            if str(voice.get("id") or "").lower() == voice_id.lower()
-            and (
-                not provider
-                or str(voice.get("provider") or "").lower() == provider.lower()
-            )
-        ]
+        selected = self.catalog.find_voice(model_id or "", voice_id, provider)
+        matches = [selected] if selected is not None else []
         if not matches:
             return _result(
                 success=False,
@@ -610,12 +607,14 @@ class AllModelsSpeechManagementTool:
         for grant in data.get("promotion_grants", []):
             if not isinstance(grant, dict):
                 continue
-            grants.append({
-                "name": grant.get("name") or "Grant",
-                "remaining_usd": str(grant.get("remaining_usd", 0)),
-                "eligible": bool(grant.get("eligible")),
-                "expires_at": grant.get("expires_at"),
-            })
+            grants.append(
+                {
+                    "name": grant.get("name") or "Grant",
+                    "remaining_usd": str(grant.get("remaining_usd", 0)),
+                    "eligible": bool(grant.get("eligible")),
+                    "expires_at": grant.get("expires_at"),
+                }
+            )
         return _result(
             success=True,
             state=data.get("state", "unknown"),
@@ -679,15 +678,8 @@ class AllModelsSpeechManagementTool:
         provider = str(args.get("voice_provider") or "").strip()
         if not voice_id:
             return _result(success=False, error="voice_id_required")
-        matches = [
-            voice
-            for voice in voices
-            if str(voice.get("id") or "").lower() == voice_id.lower()
-            and (
-                not provider
-                or str(voice.get("provider") or "").lower() == provider.lower()
-            )
-        ]
+        resolved = self.catalog.find_voice(model_id, voice_id, provider)
+        matches = [resolved] if resolved is not None else []
         if not matches:
             return _result(
                 success=False,

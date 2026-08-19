@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import settings
-from .catalog import CatalogStore, compatible_voices, voice_display_name
+from .catalog import CatalogStore, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
 from .update_checker import PluginUpdateChecker
@@ -64,8 +64,16 @@ class SpeechCommand:
             or get_session_env("HERMES_UI_SESSION_ID")
             or "local"
         )
-        user = get_session_env("HERMES_SESSION_USER_ID") or get_session_env("HERMES_SESSION_USER_NAME") or "local"
-        platform = get_session_env("HERMES_SESSION_PLATFORM") or get_session_env("HERMES_SESSION_SOURCE") or "cli"
+        user = (
+            get_session_env("HERMES_SESSION_USER_ID")
+            or get_session_env("HERMES_SESSION_USER_NAME")
+            or "local"
+        )
+        platform = (
+            get_session_env("HERMES_SESSION_PLATFORM")
+            or get_session_env("HERMES_SESSION_SOURCE")
+            or "cli"
+        )
         return home, platform, session, user
 
     @staticmethod
@@ -145,7 +153,11 @@ class SpeechCommand:
         # data remains immediately available; a cold cache waits at most 2s.
         catalog = self.catalog.ensure(key, cold_timeout=2.0)
         error = self.catalog.last_error()
-        if error is not None and error.is_auth_error and (not parts or parts[0].lower() not in {"signup", "verify"}):
+        if (
+            error is not None
+            and error.is_auth_error
+            and (not parts or parts[0].lower() not in {"signup", "verify"})
+        ):
             return (
                 "The saved AllModels API key was rejected. Update ALLMODELS_API_KEY through "
                 "Hermes credential setup, or run `/speech signup <email>` to replace it."
@@ -180,7 +192,9 @@ class SpeechCommand:
             return self._advanced(rest)
         return self._control_center(error=f"Unknown option: {parts[0]}")
 
-    def _handle_unauthenticated(self, identity: Tuple[str, ...], parts: List[str]) -> str:
+    def _handle_unauthenticated(
+        self, identity: Tuple[str, ...], parts: List[str]
+    ) -> str:
         if parts:
             command = parts[0].lower()
             if command == "signup":
@@ -232,7 +246,9 @@ class SpeechCommand:
         except (TypeError, ValueError):
             ttl = 300
         with self._state_lock:
-            self._pending_signups[identity] = _PendingSignup(email, time.monotonic() + ttl)
+            self._pending_signups[identity] = _PendingSignup(
+                email, time.monotonic() + ttl
+            )
         return (
             f"AllModels sent a six-digit code to {self._mask_email(email)}. "
             f"It expires in about {max(1, ttl // 60)} minute(s).\n\n"
@@ -261,7 +277,9 @@ class SpeechCommand:
                 "AllModels signup is complete and the API key was saved securely. "
                 "The speech catalog is initializing; run `/speech tts model` in a moment."
             )
-        return "AllModels signup is complete.\n\n" + self._show_authors(identity, "tts", catalog)
+        return "AllModels signup is complete.\n\n" + self._show_authors(
+            identity, "tts", catalog
+        )
 
     def _control_center(self, *, error: str = "") -> str:
         status = settings.speech_status()
@@ -310,7 +328,10 @@ class SpeechCommand:
         return result
 
     def _handle_tts(
-        self, identity: Tuple[str, ...], args: Sequence[str], catalog: Optional[Dict[str, Any]]
+        self,
+        identity: Tuple[str, ...],
+        args: Sequence[str],
+        catalog: Optional[Dict[str, Any]],
     ) -> str:
         if not args:
             status = settings.speech_status()
@@ -334,10 +355,22 @@ class SpeechCommand:
             return "not configured"
         provider = str(status.get("tts_voice_provider") or "")
         name = voice_display_name(self.catalog.cached(), voice_id, provider)
+        if not name and status.get("tts_model"):
+            try:
+                resolved = self.catalog.find_voice(
+                    str(status["tts_model"]), voice_id, provider
+                )
+                if resolved is not None:
+                    name = str(resolved.get("name") or "") or None
+            except AllModelsAPIError:
+                pass
         return name or f"Configured {provider.title() or 'TTS'} voice"
 
     def _handle_stt(
-        self, identity: Tuple[str, ...], args: Sequence[str], catalog: Optional[Dict[str, Any]]
+        self,
+        identity: Tuple[str, ...],
+        args: Sequence[str],
+        catalog: Optional[Dict[str, Any]],
     ) -> str:
         if not args:
             status = settings.speech_status()
@@ -373,7 +406,9 @@ class SpeechCommand:
                 if selected is None:
                     return f"Choose a number from 1 to {len(snapshot.items)}."
                 if stage.endswith("authors"):
-                    return self._show_models(identity, capability, catalog, selected["id"])
+                    return self._show_models(
+                        identity, capability, catalog, selected["id"]
+                    )
                 return self._select_model(identity, capability, catalog, selected)
 
         exact_model = self._exact_model(models, query)
@@ -381,18 +416,27 @@ class SpeechCommand:
             return self._select_model(identity, capability, catalog, exact_model)
 
         authors = self._authors(models)
-        exact_author = next((author for author in authors if author.lower() == query.lower()), None)
+        exact_author = next(
+            (author for author in authors if author.lower() == query.lower()), None
+        )
         if exact_author:
             return self._show_models(identity, capability, catalog, exact_author)
 
-        author_matches = [author for author in authors if query.lower() in author.lower()]
+        author_matches = [
+            author for author in authors if query.lower() in author.lower()
+        ]
         if author_matches:
             return self._show_authors(identity, capability, catalog, query=query)
 
         matches = [model for model in models if self._model_search_text(model, query)]
         if not matches:
             return f"No {capability.upper()} authors or models matched {query!r}."
-        return self._show_model_items(identity, capability, matches[:10], title=f"Matching {capability.upper()} models")
+        return self._show_model_items(
+            identity,
+            capability,
+            matches[:10],
+            title=f"Matching {capability.upper()} models",
+        )
 
     @staticmethod
     def _authors(models: Sequence[Dict[str, Any]]) -> List[str]:
@@ -425,7 +469,7 @@ class SpeechCommand:
         return self._numbered(
             f"Choose a {capability.upper()} model author",
             items,
-            f"Select with `/speech {capability} model <number-or-author>`."
+            f"Select with `/speech {capability} model <number-or-author>`.",
         )
 
     def _show_models(
@@ -441,7 +485,11 @@ class SpeechCommand:
             if str(model.get("id") or "").partition("/")[0].lower() == author.lower()
         ]
         return self._show_model_items(
-            identity, capability, models[:10], title=f"Choose a {capability.upper()} model by {author}", author=author
+            identity,
+            capability,
+            models[:10],
+            title=f"Choose a {capability.upper()} model by {author}",
+            author=author,
         )
 
     def _show_model_items(
@@ -461,7 +509,7 @@ class SpeechCommand:
         return self._numbered(
             title,
             items,
-            f"Select with `/speech {capability} model <number-or-full-id>`."
+            f"Select with `/speech {capability} model <number-or-full-id>`.",
         )
 
     @staticmethod
@@ -474,18 +522,24 @@ class SpeechCommand:
         return any(needle in value.lower() for value in values)
 
     @staticmethod
-    def _exact_model(models: Sequence[Dict[str, Any]], query: str) -> Optional[Dict[str, Any]]:
+    def _exact_model(
+        models: Sequence[Dict[str, Any]], query: str
+    ) -> Optional[Dict[str, Any]]:
         needle = query.lower()
         for model in models:
             if str(model.get("id") or "").lower() == needle:
                 return model
             aliases = model.get("aliases")
-            if isinstance(aliases, list) and any(str(alias).lower() == needle for alias in aliases):
+            if isinstance(aliases, list) and any(
+                str(alias).lower() == needle for alias in aliases
+            ):
                 return model
         return None
 
     @staticmethod
-    def _number_selection(snapshot: _MenuSnapshot, raw: str) -> Optional[Dict[str, Any]]:
+    def _number_selection(
+        snapshot: _MenuSnapshot, raw: str
+    ) -> Optional[Dict[str, Any]]:
         try:
             index = int(raw) - 1
         except ValueError:
@@ -512,12 +566,18 @@ class SpeechCommand:
         status = settings.speech_status()
         current_voice = str(status.get("tts_voice") or "")
         current_provider = str(status.get("tts_voice_provider") or "")
-        compatible = compatible_voices(catalog, model)
-        keep_voice = any(
-            item["id"] == current_voice and (not current_provider or item["provider"] == current_provider)
-            for item in compatible
+        try:
+            page = self.catalog.search_voices(model_id=model_id, page_size=10)
+            compatible = page["voices"]
+            keep_voice = bool(
+                current_voice
+                and self.catalog.find_voice(model_id, current_voice, current_provider)
+            )
+        except AllModelsAPIError as exc:
+            return str(exc)
+        settings.set_tts_model(
+            model_id, clear_voice=bool(current_voice and not keep_voice)
         )
-        settings.set_tts_model(model_id, clear_voice=bool(current_voice and not keep_voice))
         heading = f"TTS model set to {model_id}."
         if current_voice and not keep_voice:
             heading += " The previous voice was incompatible and has been cleared."
@@ -538,8 +598,13 @@ class SpeechCommand:
         model = self._exact_model(_eligible_models(catalog, "tts"), model_id)
         if model is None:
             return "The selected TTS model is no longer in the catalog. Choose a new model."
-        voices = compatible_voices(catalog, model)
         if not args:
+            try:
+                voices = self.catalog.search_voices(model_id=model_id, page_size=10)[
+                    "voices"
+                ]
+            except AllModelsAPIError as exc:
+                return str(exc)
             return self._show_voice_items(identity, voices)
         explicit_search = args[0].lower() == "search"
         if explicit_search:
@@ -557,34 +622,24 @@ class SpeechCommand:
                 if selected is None:
                     return f"Choose a number from 1 to {len(snapshot.items)}."
                 return self._select_voice(selected)
+        try:
+            voices = self.catalog.search_voices(
+                model_id=model_id,
+                query=query,
+                page_size=10,
+            )["voices"]
+        except AllModelsAPIError as exc:
+            return str(exc)
         exact = [voice for voice in voices if voice["id"].lower() == query.lower()]
         if len(exact) == 1:
             return self._select_voice(exact[0])
-        matches = [
-            voice for voice in voices
-            if self._voice_search_text(voice, query)
-        ]
-        if not matches:
+        if not voices:
             return f"No compatible voices matched {query!r}."
-        return self._show_voice_items(identity, matches)
+        return self._show_voice_items(identity, voices)
 
-    @staticmethod
-    def _voice_search_text(voice: Dict[str, Any], query: str) -> bool:
-        values = [
-            voice.get("id"),
-            voice.get("name"),
-            voice.get("provider"),
-            voice.get("language"),
-            voice.get("gender"),
-            voice.get("description"),
-        ]
-        models = voice.get("models")
-        if isinstance(models, list):
-            values.extend(models)
-        haystack = " ".join(str(value) for value in values if value).lower()
-        return all(term in haystack for term in query.lower().split())
-
-    def _show_voice_items(self, identity: Tuple[str, ...], voices: Sequence[Dict[str, Any]]) -> str:
+    def _show_voice_items(
+        self, identity: Tuple[str, ...], voices: Sequence[Dict[str, Any]]
+    ) -> str:
         items = [dict(voice) for voice in voices[:10]]
         if not items:
             return "No compatible voices are currently advertised for this model."
@@ -593,7 +648,7 @@ class SpeechCommand:
             "Choose a compatible voice",
             items,
             "Search with `/speech tts voice search <query>`, or select with "
-            "`/speech tts voice <number-or-voice-id>`."
+            "`/speech tts voice <number-or-voice-id>`.",
         )
 
     @staticmethod
@@ -645,7 +700,9 @@ class SpeechCommand:
             for grant in grants[:10]:
                 if not isinstance(grant, dict):
                     continue
-                eligible = "eligible" if grant.get("eligible") else "not currently eligible"
+                eligible = (
+                    "eligible" if grant.get("eligible") else "not currently eligible"
+                )
                 expiry = grant.get("expires_at") or "no expiry"
                 lines.append(
                     f"- {grant.get('name', 'Grant')}: ${Decimal(str(grant.get('remaining_usd', 0))):.2f}, "
@@ -661,7 +718,11 @@ class SpeechCommand:
             amount = Decimal(raw)
         except InvalidOperation:
             return "Top-up amount must be a number from $5 to $1,000."
-        if amount.as_tuple().exponent < -2 or amount < Decimal("5") or amount > Decimal("1000"):
+        if (
+            amount.as_tuple().exponent < -2
+            or amount < Decimal("5")
+            or amount > Decimal("1000")
+        ):
             return "Top-up amount must be from $5 to $1,000 with at most two decimal places."
         try:
             data = self.client.create_topup(amount)
@@ -689,7 +750,9 @@ class SpeechCommand:
                 str(output),
                 model=str(status["tts_model"]),
                 voice=str(status["tts_voice"]),
-                speed=float(status["tts_speed"]) if status.get("tts_speed") is not None else None,
+                speed=float(status["tts_speed"])
+                if status.get("tts_speed") is not None
+                else None,
                 format="mp3",
             )
         except Exception as exc:
@@ -730,7 +793,10 @@ class SpeechCommand:
             language = values[0]
             if language.lower() == "default":
                 settings.set_stt_language(None)
-                inherited = settings.speech_status().get("stt_inherited_language") or "automatic detection"
+                inherited = (
+                    settings.speech_status().get("stt_inherited_language")
+                    or "automatic detection"
+                )
                 return f"STT language restored to the Hermes default ({inherited})."
             if not _LANGUAGE_RE.fullmatch(language):
                 return "Use a language tag such as `en`, `ja`, or `pt-BR`."

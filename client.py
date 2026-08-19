@@ -52,7 +52,9 @@ def _extract_error(payload: Any) -> tuple[str, str]:
     if isinstance(raw, str):
         return raw, str(payload.get("message") or "")
     if isinstance(raw, dict):
-        return str(raw.get("code") or raw.get("type") or ""), str(raw.get("message") or "")
+        return str(raw.get("code") or raw.get("type") or ""), str(
+            raw.get("message") or ""
+        )
     return str(payload.get("code") or ""), str(payload.get("message") or "")
 
 
@@ -76,26 +78,34 @@ class AllModelsClient:
         from hermes_cli.config import get_env_path, is_managed
 
         if is_managed():
-            raise RuntimeError("This Hermes installation is managed and cannot save an AllModels API key.")
+            raise RuntimeError(
+                "This Hermes installation is managed and cannot save an AllModels API key."
+            )
         try:
             from hermes_cli import managed_scope
 
             if managed_scope.is_env_managed(API_KEY_ENV):
-                raise RuntimeError("ALLMODELS_API_KEY is managed by your administrator and cannot be replaced.")
+                raise RuntimeError(
+                    "ALLMODELS_API_KEY is managed by your administrator and cannot be replaced."
+                )
         except ImportError:
             pass
 
         env_path = Path(get_env_path())
         if env_path.exists():
             if not os.access(env_path, os.W_OK):
-                raise RuntimeError(f"Hermes cannot write its credential file: {env_path}")
+                raise RuntimeError(
+                    f"Hermes cannot write its credential file: {env_path}"
+                )
             return
 
         probe = env_path.parent
         while not probe.exists() and probe != probe.parent:
             probe = probe.parent
         if not os.access(probe, os.W_OK):
-            raise RuntimeError(f"Hermes cannot create its credential file under: {env_path.parent}")
+            raise RuntimeError(
+                f"Hermes cannot create its credential file under: {env_path.parent}"
+            )
 
     def save_api_key(self, api_key: str) -> None:
         value = (api_key or "").strip()
@@ -113,6 +123,7 @@ class AllModelsClient:
         api_key: str = "",
         authenticated: bool = True,
         json_body: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         request_headers = {"Accept": "application/json"}
@@ -121,7 +132,9 @@ class AllModelsClient:
             key = (api_key or self.get_api_key()).strip()
             if not key:
                 raise AllModelsAPIError(
-                    _ERROR_MESSAGES["missing_api_key"], code="missing_api_key", status_code=401
+                    _ERROR_MESSAGES["missing_api_key"],
+                    code="missing_api_key",
+                    status_code=401,
                 )
             request_headers["Authorization"] = f"Bearer {key}"
             used_key = key
@@ -134,13 +147,18 @@ class AllModelsClient:
                 f"{self.api_root}{path}",
                 headers=request_headers,
                 json=json_body,
+                params=params,
                 timeout=self.timeout,
                 follow_redirects=False,
             )
         except httpx.TimeoutException as exc:
-            raise AllModelsAPIError("The AllModels request timed out. Try again.") from exc
+            raise AllModelsAPIError(
+                "The AllModels request timed out. Try again."
+            ) from exc
         except httpx.HTTPError as exc:
-            raise AllModelsAPIError("Could not connect to AllModels. Check the network and try again.") from exc
+            raise AllModelsAPIError(
+                "Could not connect to AllModels. Check the network and try again."
+            ) from exc
 
         try:
             payload = response.json()
@@ -162,7 +180,9 @@ class AllModelsClient:
                     message = detail or "AllModels rejected the request."
             if used_key:
                 message = message.replace(used_key, "[REDACTED]")
-            raise AllModelsAPIError(message[:800], code=code, status_code=response.status_code)
+            raise AllModelsAPIError(
+                message[:800], code=code, status_code=response.status_code
+            )
         if not isinstance(payload, dict):
             raise AllModelsAPIError("AllModels returned an unexpected response.")
         return payload
@@ -170,8 +190,43 @@ class AllModelsClient:
     def list_models(self, api_key: str = "") -> Dict[str, Any]:
         return self._request_json("GET", "/v1/models", api_key=api_key)
 
-    def list_voices(self, api_key: str = "") -> Dict[str, Any]:
-        return self._request_json("GET", "/v1/voices", api_key=api_key)
+    def list_voices(
+        self,
+        api_key: str = "",
+        *,
+        query: str = "",
+        model: str = "",
+        provider: str = "",
+        language: str = "",
+        category: str = "",
+        label: str = "",
+        sort: str = "",
+        page_size: int = 20,
+        cursor: str = "",
+        include_facets: bool = False,
+    ) -> Dict[str, Any]:
+        """Search the public, cursor-paginated AllModels voice catalogue."""
+        params: Dict[str, Any] = {"page_size": max(1, min(100, int(page_size)))}
+        for key, value in (
+            ("q", query),
+            ("model", model),
+            ("provider", provider),
+            ("language", language),
+            ("category", category),
+            ("label", label),
+            ("sort", sort),
+            ("cursor", cursor),
+        ):
+            if value:
+                params[key] = value
+        if include_facets:
+            params["include_facets"] = "true"
+        return self._request_json(
+            "GET",
+            "/v1/voices",
+            authenticated=False,
+            params=params,
+        )
 
     def start_signup(self, email: str) -> Dict[str, Any]:
         return self._request_json(

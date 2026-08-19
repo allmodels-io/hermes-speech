@@ -75,10 +75,15 @@ top-up link` discover `manage-allmodels-speech`. Its agent-facing tool uses the
 same client, catalog, provider, and settings implementation as the `/speech`
 interface; it does not perform signup.
 
-Voice search can span all synchronous TTS models. A conversational
-`preview_voice` action validates and synthesizes an exact model/voice pair as a
-temporary MP3 without changing the configured TTS model, voice, speed, or
-format, then returns audio through Hermes' normal `MEDIA:` delivery.
+Voice search uses the [AllModels voice catalogue API](https://docs.allmodels.io/voices)
+directly. Natural-language queries such as `British female narrator` are ranked
+server-side across voice names, descriptions, languages, categories, and labels,
+and can span all synchronous TTS models. The plugin does not download or cache
+the full catalogue; it retains only a bounded cache of compact metadata for
+voices returned by queries. A conversational `preview_voice` action validates
+and synthesizes an exact model/voice pair as a temporary MP3 without changing
+the configured TTS model, voice, speed, or format, then returns audio through
+Hermes' normal `MEDIA:` delivery.
 
 Run `/speech`. If `ALLMODELS_API_KEY` is not configured, Hermes immediately
 starts AllModels email signup:
@@ -129,8 +134,9 @@ through Hermes' deferred tool search. Speech setup writes only its relevant keys
 in `config.yaml`. The API key is stored in the profile's protected `.env` as
 `ALLMODELS_API_KEY`; it is never displayed after signup.
 
-Catalogs refresh automatically in the background. There is no manual refresh
-command.
+The model catalogue refreshes automatically in the background. Voice discovery
+uses live text search with compact stale-cache fallback. There is no manual
+refresh command.
 
 Hermes Speech checks the repository's latest stable GitHub Release in the
 background when `/speech` or an agent-facing plugin tool is used. The result is

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 
@@ -11,6 +12,7 @@ class FakeClient:
         self.saved = None
         self.signup_email = None
         self.topup_amount = None
+        self.voice_requests = []
 
     def get_api_key(self):
         return self.key
@@ -34,8 +36,46 @@ class FakeClient:
     def list_models(self, api_key=""):
         return self.models
 
-    def list_voices(self, api_key=""):
-        return {"voices": self.voices}
+    def list_voices(
+        self,
+        api_key="",
+        *,
+        query="",
+        model="",
+        provider="",
+        page_size=20,
+        **_kwargs,
+    ):
+        self.voice_requests.append(
+            {
+                "query": query,
+                "model": model,
+                "provider": provider,
+                "page_size": page_size,
+            }
+        )
+        rows = []
+        for row in self.voices:
+            if model and row["model"]["id"] != model:
+                continue
+            if provider and not any(
+                item["id"] == provider for item in row["providers"]
+            ):
+                continue
+            if query and not all(
+                term in json.dumps(row).lower() for term in query.lower().split()
+            ):
+                continue
+            rows.append(row)
+        page = rows[:page_size]
+        return {
+            "voices": page,
+            "facets": [],
+            "total_count": len(rows),
+            "has_more": len(rows) > page_size,
+            "next_cursor": "next" if len(rows) > page_size else None,
+            "catalogue_updated_at": "2026-08-18T00:00:00Z",
+        }
 
     def get_balance(self, api_key=""):
         return {
@@ -86,7 +126,9 @@ def test_signup_verification_continues_to_tts_authors(
     assert "elevenlabs" in verified
 
 
-def test_tts_author_model_voice_flow(speech_pkg, hermes_home, sample_models, sample_voices):
+def test_tts_author_model_voice_flow(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
     command, _ = make_command(speech_pkg, sample_models, sample_voices)
     authors = command.handle("tts model")
     assert "1. elevenlabs" in authors
@@ -106,15 +148,21 @@ def test_tts_author_model_voice_flow(speech_pkg, hermes_home, sample_models, sam
     assert status["tts_voice_provider"] == "elevenlabs"
 
 
-def test_voice_search_uses_cached_metadata(
+def test_voice_search_uses_server_side_text_query(
     speech_pkg, hermes_home, sample_models, sample_voices
 ):
-    command, _ = make_command(speech_pkg, sample_models, sample_voices)
+    command, client = make_command(speech_pkg, sample_models, sample_voices)
     command.handle("tts model elevenlabs/eleven-turbo-v2-5")
 
     help_text = command.handle("tts voice")
     assert "/speech tts voice search <query>" in help_text
     assert "Aria" in command.handle("tts voice search female")
+    assert client.voice_requests[-1] == {
+        "query": "female",
+        "model": "elevenlabs/eleven-turbo-v2-5",
+        "provider": "",
+        "page_size": 10,
+    }
     assert "Aria" in command.handle("tts voice aria")
     assert "Enter a voice name" in command.handle("tts voice search")
 
@@ -134,7 +182,9 @@ def test_control_center_displays_voice_name_instead_of_id(
     assert settings.speech_status()["tts_voice"] == "03397b4c4be74759b72533b663fbd001"
 
 
-def test_exact_alias_selects_model(speech_pkg, hermes_home, sample_models, sample_voices):
+def test_exact_alias_selects_model(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
     command, _ = make_command(speech_pkg, sample_models, sample_voices)
     result = command.handle("tts model elevenlabs/eleven_turbo_v2_5")
     assert "TTS model set to elevenlabs/eleven-turbo-v2-5" in result
@@ -177,7 +227,9 @@ def test_stt_author_model_flow(speech_pkg, hermes_home, sample_models, sample_vo
     assert status["stt_enabled"] is True
 
 
-def test_advanced_settings_and_defaults(speech_pkg, hermes_home, sample_models, sample_voices):
+def test_advanced_settings_and_defaults(
+    speech_pkg, hermes_home, sample_models, sample_voices
+):
     command, _ = make_command(speech_pkg, sample_models, sample_voices)
     assert "1.25" in command.handle("advanced speed 1.25")
     assert "ja" in command.handle("advanced language ja")
@@ -265,7 +317,9 @@ def test_config_updates_preserve_unrelated_settings(
     from hermes_cli.config import read_raw_config, save_config
     from hermes_speech_testpkg import settings
 
-    save_config({"display": {"skin": "nord"}, "custom": {"keep": True}}, strip_defaults=False)
+    save_config(
+        {"display": {"skin": "nord"}, "custom": {"keep": True}}, strip_defaults=False
+    )
     settings.set_stt_model("deepgram/nova-3")
     raw = read_raw_config()
     assert raw["display"]["skin"] == "nord"

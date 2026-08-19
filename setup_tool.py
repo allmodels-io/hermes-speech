@@ -7,7 +7,7 @@ import re
 from typing import Any, Dict, Optional
 
 from . import settings
-from .catalog import CatalogStore, compatible_voices, voice_display_name
+from .catalog import CatalogStore, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import _eligible_models
 from .update_checker import PluginUpdateChecker
@@ -37,7 +37,12 @@ SETUP_TOOL_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["status", "start_signup", "verify_signup", "configure_defaults"],
+                "enum": [
+                    "status",
+                    "start_signup",
+                    "verify_signup",
+                    "configure_defaults",
+                ],
                 "description": "The next setup operation to perform.",
             },
             "email": {
@@ -68,7 +73,9 @@ def _mask_email(email: str) -> str:
     return f"{masked}@{domain}"
 
 
-def _preferred_model(models: list[Dict[str, Any]], preferred: tuple[str, ...]) -> Optional[Dict[str, Any]]:
+def _preferred_model(
+    models: list[Dict[str, Any]], preferred: tuple[str, ...]
+) -> Optional[Dict[str, Any]]:
     by_id = {str(model.get("id") or ""): model for model in models}
     for model_id in preferred:
         if model_id in by_id:
@@ -109,7 +116,9 @@ class AllModelsSpeechSetupTool:
                 )
             if action == "configure_defaults":
                 return self._configure_defaults()
-            return _result(success=False, error="unsupported_action", next_action="status")
+            return _result(
+                success=False, error="unsupported_action", next_action="status"
+            )
         except (AllModelsAPIError, RuntimeError) as exc:
             return _result(success=False, error=str(exc), next_action="status")
 
@@ -209,7 +218,9 @@ class AllModelsSpeechSetupTool:
         email = raw_email.strip().lower()
         code = raw_code.strip()
         if not _EMAIL_RE.fullmatch(email):
-            return _result(success=False, error="invalid_email", next_action="verify_signup")
+            return _result(
+                success=False, error="invalid_email", next_action="verify_signup"
+            )
         if not _CODE_RE.fullmatch(code):
             return _result(
                 success=False,
@@ -267,8 +278,7 @@ class AllModelsSpeechSetupTool:
                 next_action="configure_defaults",
                 retryable=True,
             )
-        voices = compatible_voices(catalog, tts_model)
-        voice = self._default_voice(catalog, tts_model, voices)
+        voice = self._default_voice(tts_model)
         if voice is None:
             return _result(
                 success=False,
@@ -294,53 +304,34 @@ class AllModelsSpeechSetupTool:
             voice_mode_hint="Use /voice on and /voice tts to enable normal Hermes spoken replies.",
         )
 
-    @staticmethod
-    def _default_voice(
-        catalog: Dict[str, Any],
-        model: Dict[str, Any],
-        voices: list[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
-        preferred = _PREFERRED_VOICES.get(str(model.get("id") or ""))
+    def _default_voice(self, model: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        model_id = str(model.get("id") or "")
+        preferred = _PREFERRED_VOICES.get(model_id)
         if preferred is not None:
             preferred_provider, preferred_id = preferred
-            match = next(
-                (
-                    voice
-                    for voice in voices
-                    if voice["provider"] == preferred_provider and voice["id"] == preferred_id
-                ),
-                None,
-            )
+            match = self.catalog.find_voice(model_id, preferred_id, preferred_provider)
             if match is not None:
                 return match
-
-        groups = catalog.get("voices") if isinstance(catalog.get("voices"), dict) else {}
-        for binding in model.get("providers", []):
-            if not isinstance(binding, dict) or binding.get("synchronous") is not True:
-                continue
-            provider = str(binding.get("id") or "")
-            group = groups.get(provider)
-            default_id = str(group.get("default") or "") if isinstance(group, dict) else ""
-            match = next(
-                (
-                    voice
-                    for voice in voices
-                    if voice["provider"] == provider and voice["id"] == default_id
-                ),
-                None,
-            )
-            if match is not None:
-                return match
+        voices = self.catalog.search_voices(model_id=model_id, page_size=10)["voices"]
+        match = next((voice for voice in voices if voice.get("provider_default")), None)
+        if match is not None:
+            return match
         return voices[0] if voices else None
 
-    @staticmethod
     def _public_status(
+        self,
         status: Dict[str, Any],
         catalog: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         provider = str(status.get("tts_voice_provider") or "")
         voice_id = str(status.get("tts_voice") or "")
         voice_name = voice_display_name(catalog, voice_id, provider)
+        if not voice_name and voice_id and status.get("tts_model"):
+            resolved = self.catalog.find_voice(
+                str(status["tts_model"]), voice_id, provider
+            )
+            if resolved is not None:
+                voice_name = str(resolved.get("name") or "") or None
         if not voice_name and voice_id:
             voice_name = f"Configured {provider.title() or 'TTS'} voice"
         return {
