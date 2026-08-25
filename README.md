@@ -1,25 +1,42 @@
 <p align="center">
-  <a href="https://allmodels.io">
-    <img src="https://allmodels.io/assets/providers/allmodels-mark.png" alt="AllModels" width="112">
-  </a>
+  <img src=".github/social-preview.png" alt="Hermes Speech — TTS and STT plugin for Hermes Agent" width="100%">
 </p>
 
-<h1 align="center">Hermes Speech</h1>
+<h1 align="center">Hermes Speech — TTS &amp; STT Plugin for Hermes Agent</h1>
 
 <p align="center">
-  Native AllModels speech for Hermes Agent
+  <a href="https://github.com/allmodels-io/hermes-speech/releases/latest"><img src="https://img.shields.io/github/v/release/allmodels-io/hermes-speech?display_name=tag&amp;sort=semver" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/allmodels-io/hermes-speech" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Hermes_Agent-0.20%2B-3b82f6" alt="Hermes Agent 0.20 or later">
+  <img src="https://img.shields.io/badge/extra_pip_dependencies-none-111113" alt="No additional pip dependencies">
 </p>
 
-`hermes-speech` is a native [Hermes Agent](https://github.com/NousResearch/hermes-agent)
-plugin for [allmodels.io](https://allmodels.io) TTS and STT. It registers `allmodels`
-as a Hermes text-to-speech and transcription provider, adds a guided `/speech`
-command, and bundles an agent-facing setup tool and skill.
+Give [Hermes Agent](https://github.com/NousResearch/hermes-agent) native
+text-to-speech (TTS), speech-to-text (STT), streaming audio, searchable voice
+previews, and conversational speech setup through [AllModels](https://allmodels.io).
+One AllModels API key connects Hermes to every supported speech provider, model,
+and voice in the live catalogue.
 
-The plugin exposes two normal Hermes skills:
+`hermes-speech` registers `allmodels` as a normal Hermes TTS and transcription
+provider. Hermes' existing `/voice` mode, sentence pipeline, messaging gateways,
+CLI, TUI, and desktop app continue to work normally. See the
+[AllModels Hermes Agent guide](https://docs.allmodels.io/hermes-agent) for the
+user-facing walkthrough.
 
-- `configure-allmodels-speech` for signup and automatic first-time defaults
-- `manage-allmodels-speech` for authenticated model, voice, balance, top-up,
-  testing, and advanced-setting changes
+## What it does
+
+- **Native Hermes Agent TTS and STT** — spoken replies and voice-message
+  transcription use Hermes' standard provider interfaces.
+- **Conversational setup** — tell your agent to set up speech; it handles
+  AllModels signup, verification, and compatible starting defaults.
+- **Voice search and previews** — find voices by name, description, language,
+  gender, provider, or qualities and hear samples before selecting one.
+- **Streaming-aware speech** — supported models use streaming TTS; other models
+  automatically retain Hermes' synchronous sentence pipeline.
+- **Speech management** — change models and voices, tune speed and transcription,
+  check balance, create top-up links, test audio, and update the plugin.
+- **No additional pip install** — it uses the OpenAI and HTTP clients already
+  bundled with Hermes.
 
 ## Requirements
 
@@ -29,30 +46,48 @@ The plugin exposes two normal Hermes skills:
 
 ## Install
 
-Install and enable the plugin directly from GitHub:
+The easiest installation is conversational. Send this message to your Hermes
+agent:
+
+```text
+install this plugin and set it up:
+https://github.com/allmodels-io/hermes-speech
+```
+
+Or install and enable it from the terminal:
 
 ```bash
 hermes plugins install allmodels-io/hermes-speech --enable
 ```
 
-Restart a running Hermes CLI or gateway after installation.
+Hermes Desktop users can also use the
+[one-click installation link](hermes://plugin/install?repo=allmodels-io/hermes-speech&enable=1).
+Hermes will show its normal review and confirmation screen before installing.
 
-## Development
+Restart a running Hermes CLI, desktop backend, or gateway after installation.
 
-Run the focused suite from the repository root with Hermes' Python environment:
+## Quick start
 
-```bash
-python -m pytest -q tests
-python -m ruff check .
-```
-
-## Usage
-
-The easiest setup is conversational. Tell Hermes:
+Ask Hermes to configure AllModels speech:
 
 ```text
 Set up AllModels speech for me.
 ```
+
+Then enable Hermes' normal voice pipeline:
+
+```text
+/voice on
+/voice tts
+```
+
+Try managing speech in normal conversation:
+
+```text
+Find elon's voice and use it.
+```
+
+## Conversational speech setup and management
 
 With the plugin enabled, unqualified setup requests such as `Set up speech`,
 `Configure TTS and STT`, or `Get voice working` match the bundled skill by its
@@ -125,6 +160,16 @@ sentence-pipelined path. Local CLI/TUI/desktop file output keeps Hermes'
 requested MP3; messaging gateways that require native voice bubbles use
 Ogg/Opus.
 
+## TTS, STT, and voice providers
+
+Hermes Speech reads the live AllModels model and voice catalogues instead of
+shipping a fixed provider list. One integration can expose text-to-speech,
+speech-to-text, voice search, and streaming audio from supported providers such
+as ElevenLabs, Cartesia, Fish Audio, Soniox, and OpenAI-compatible speech APIs.
+Models and availability change over time; the
+[AllModels model catalogue](https://allmodels.io/models) and
+[voice catalogue](https://docs.allmodels.io/voices) are the source of truth.
+
 ## Configuration
 
 The plugin adds its bundled `skills/` directory to the active profile's
@@ -154,3 +199,19 @@ Automatic checks only notify. `/speech update` or an explicit conversational
 request such as `Update Hermes Speech` performs the update and then asks for a
 Hermes restart. Linked development installs, non-Git copies, unexpected Git
 remotes, and checkouts with local changes are never modified automatically.
+
+## Support
+
+- Read the [AllModels Hermes Agent guide](https://docs.allmodels.io/hermes-agent).
+- Review the [Hermes Agent voice and TTS documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/tts).
+- Report plugin bugs or request improvements through
+  [GitHub Issues](https://github.com/allmodels-io/hermes-speech/issues).
+
+## Development
+
+Run the focused suite from the repository root with Hermes' Python environment:
+
+```bash
+python -m pytest -q tests
+python -m ruff check .
+```
