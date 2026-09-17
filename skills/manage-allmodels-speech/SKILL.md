@@ -1,6 +1,6 @@
 ---
 name: manage-allmodels-speech
-description: Manage an existing AllModels speech account, Hermes speech configuration, and read-only Hermes Speech update checks. Use when the user wants to inspect or change TTS/STT models, find or select voices by name or qualities, preview a voice without changing saved settings, check balance or promotional grants, create a top-up link, test configured speech, change TTS speed, override STT language, set or clear an STT prompt, check for a Hermes Speech update, or explicitly asks the agent to update the plugin through Hermes. Prefer this skill for an unqualified voice-management request when Hermes is already configured with AllModels. Do not use for signup, verification, first-time setup, replacing an account, an explicit request for Edge or another named provider, or merely toggling voice mode.
+description: Manage an existing AllModels speech account, Hermes speech configuration, and read-only Hermes Speech update checks. Use when the user wants to inspect or change TTS/STT models, find or select voices by name or qualities, preview a voice without changing saved settings, check balance, create a top-up link, test configured speech, change TTS speed, override STT language, set or clear an STT prompt, check for a Hermes Speech update, or explicitly asks the agent to update the plugin through Hermes. Prefer this skill for an unqualified voice-management request when Hermes is already configured with AllModels. Do not use for signup, verification, first-time setup, replacing an account, an explicit request for Edge or another named provider, or merely toggling voice mode.
 ---
 
 # Manage AllModels Speech
@@ -20,7 +20,7 @@ Do not substitute generic `text_to_speech`, terminal configuration edits, Edge, 
 
 - Call `get_status` when the current selection or advanced settings matter.
 - If any action returns `account_required`, stop management and load `hermes-speech:configure-allmodels-speech` for first-time setup. Never perform signup in this workflow.
-- Call `get_balance` for paid balance, promotional balance, and applicable grants.
+- Call `get_balance` for paid and promotional balance totals.
 - For a top-up, obtain the amount, then call `create_topup_link`. Return the secure URL without opening it. Creating a link does not itself charge the user.
 
 ## Plugin updates

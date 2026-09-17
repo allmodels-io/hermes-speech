@@ -598,6 +598,8 @@ class SpeechCommand:
         model = self._exact_model(_eligible_models(catalog, "tts"), model_id)
         if model is None:
             return "The selected TTS model is no longer in the catalog. Choose a new model."
+        if args and args[0].lower() == "preview":
+            return self._preview_voice(identity, model_id, args[1:])
         if not args:
             try:
                 voices = self.catalog.search_voices(model_id=model_id, page_size=10)[
@@ -647,8 +649,73 @@ class SpeechCommand:
         return self._numbered(
             "Choose a compatible voice",
             items,
-            "Search with `/speech tts voice search <query>`, or select with "
-            "`/speech tts voice <number-or-voice-id>`.",
+            "Preview without selecting with `/speech tts voice preview <number> "
+            "[optional sample text]`.\n"
+            "Select with `/speech tts voice <number-or-voice-id>`, or search with "
+            "`/speech tts voice search <query>`.",
+        )
+
+    def _preview_voice(
+        self,
+        identity: Tuple[str, ...],
+        model_id: str,
+        args: Sequence[str],
+    ) -> str:
+        if not args:
+            return (
+                "Choose a voice from the latest results: "
+                "`/speech tts voice preview <number> [optional sample text]`."
+            )
+        reference = args[0].strip()
+        voice: Optional[Dict[str, Any]] = None
+        if reference.isdigit():
+            snapshot = self._menu(identity, "tts_voices")
+            if snapshot is None:
+                return "List or search voices first with `/speech tts voice`."
+            voice = self._number_selection(snapshot, reference)
+            if voice is None:
+                return f"Choose a number from 1 to {len(snapshot.items)}."
+        else:
+            try:
+                voice = self.catalog.find_voice(model_id, reference)
+            except AllModelsAPIError as exc:
+                return str(exc)
+            if voice is None:
+                return (
+                    f"No unique compatible voice matched {reference!r}. "
+                    "Search first, then preview it by number."
+                )
+
+        text = " ".join(args[1:]).strip() or (
+            "Hello! This is a preview of this voice in Hermes."
+        )
+        status = settings.speech_status()
+        speed = (
+            float(status["tts_speed"])
+            if status.get("tts_speed") is not None
+            else None
+        )
+        from hermes_constants import get_hermes_home
+
+        output = get_hermes_home() / "media" / f"speech-preview-{uuid.uuid4().hex}.mp3"
+        try:
+            path = self.tts_provider.synthesize(
+                text,
+                str(output),
+                model=model_id,
+                voice=str(voice["id"]),
+                voice_provider=str(voice["provider"]),
+                speed=speed,
+                format="mp3",
+            )
+        except Exception as exc:
+            return str(exc)
+        media_path = f'"{path}"' if " " in path else path
+        name = voice.get("name") or voice["id"]
+        return (
+            f"Previewing {name} without changing your selected voice.\n"
+            "[[audio_as_voice]]\n"
+            f"MEDIA:{media_path}"
         )
 
     @staticmethod
@@ -694,20 +761,6 @@ class SpeechCommand:
             f"Spendable paid balance: ${Decimal(str(paid)):.2f}",
             f"Promotional balance: ${promotional_usd:.2f}",
         ]
-        grants = data.get("promotion_grants")
-        if isinstance(grants, list) and grants:
-            lines.extend(["", "Promotional grants:"])
-            for grant in grants[:10]:
-                if not isinstance(grant, dict):
-                    continue
-                eligible = (
-                    "eligible" if grant.get("eligible") else "not currently eligible"
-                )
-                expiry = grant.get("expires_at") or "no expiry"
-                lines.append(
-                    f"- {grant.get('name', 'Grant')}: ${Decimal(str(grant.get('remaining_usd', 0))):.2f}, "
-                    f"{eligible}, expires {expiry}"
-                )
         return "\n".join(lines)
 
     def _topup(self, args: Sequence[str]) -> str:

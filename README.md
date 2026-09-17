@@ -137,6 +137,7 @@ Useful direct commands:
 ```text
 /speech tts model
 /speech tts voice search <name, language, gender, or provider>
+/speech tts voice preview <number> [optional sample text]
 /speech stt model
 /speech balance
 /speech topup 25

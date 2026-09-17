@@ -192,9 +192,12 @@ def test_model_change_clears_incompatible_voice(
 def test_balance_and_topup_link(speech_pkg, hermes_home, sample_models, sample_voices):
     tool, client = make_tool(speech_pkg, sample_models, sample_voices)
     balance = call(tool, "get_balance")
-    assert balance["spendable_paid_balance_usd"] == "2.50"
-    assert balance["promotional_balance_usd"] == "0.50"
-    assert balance["promotional_grants"][0]["name"] == "Welcome"
+    assert balance == {
+        "promotional_balance_usd": "0.50",
+        "spendable_paid_balance_usd": "2.50",
+        "state": "ok",
+        "success": True,
+    }
 
     invalid = call(tool, "create_topup_link", amount_usd=4)
     assert invalid["error"] == "invalid_amount"

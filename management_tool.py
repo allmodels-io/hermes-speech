@@ -604,24 +604,11 @@ class AllModelsSpeechManagementTool:
             )
         except InvalidOperation:
             promotional = Decimal("0")
-        grants = []
-        for grant in data.get("promotion_grants", []):
-            if not isinstance(grant, dict):
-                continue
-            grants.append(
-                {
-                    "name": grant.get("name") or "Grant",
-                    "remaining_usd": str(grant.get("remaining_usd", 0)),
-                    "eligible": bool(grant.get("eligible")),
-                    "expires_at": grant.get("expires_at"),
-                }
-            )
         return _result(
             success=True,
             state=data.get("state", "unknown"),
             spendable_paid_balance_usd=f"{paid:.2f}",
             promotional_balance_usd=f"{promotional:.2f}",
-            promotional_grants=grants[:_RESULT_LIMIT],
         )
 
     def _create_topup_link(self, args: Dict[str, Any]) -> str:

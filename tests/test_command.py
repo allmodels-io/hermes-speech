@@ -82,14 +82,6 @@ class FakeClient:
             "state": "ok",
             "paid_balance_usd": 2.5,
             "promotional_credits": 500000,
-            "promotion_grants": [
-                {
-                    "name": "Welcome",
-                    "remaining_usd": 0.5,
-                    "eligible": True,
-                    "expires_at": None,
-                }
-            ],
         }
 
     def create_topup(self, amount, api_key=""):
@@ -156,6 +148,8 @@ def test_voice_search_uses_server_side_text_query(
 
     help_text = command.handle("tts voice")
     assert "/speech tts voice search <query>" in help_text
+    assert "/speech tts voice preview <number>" in help_text
+    assert "without selecting" in help_text
     assert "Aria" in command.handle("tts voice search female")
     assert client.voice_requests[-1] == {
         "query": "female",
@@ -165,6 +159,42 @@ def test_voice_search_uses_server_side_text_query(
     }
     assert "Aria" in command.handle("tts voice aria")
     assert "Enter a voice name" in command.handle("tts voice search")
+
+
+def test_voice_preview_from_search_result_does_not_change_selection(
+    speech_pkg, hermes_home, sample_models, sample_voices, tmp_path
+):
+    from hermes_speech_testpkg import settings
+
+    command, _ = make_command(speech_pkg, sample_models, sample_voices)
+    command.handle("tts model fish/s2-1-pro")
+    settings.set_tts_voice("another-fish-voice", "fish")
+    results = command.handle("tts voice search elon")
+    assert "/speech tts voice preview <number>" in results
+    before = settings.speech_status()
+    captured = {}
+
+    class Provider:
+        def synthesize(self, text, output_path, **kwargs):
+            captured["text"] = text
+            captured["output_path"] = output_path
+            captured.update(kwargs)
+            path = tmp_path / "voice preview.mp3"
+            path.write_bytes(b"audio")
+            return str(path)
+
+    command.tts_provider = Provider()
+    preview = command.handle("tts voice preview 1 The quick brown fox.")
+
+    assert "without changing your selected voice" in preview
+    assert "[[audio_as_voice]]" in preview
+    assert f'MEDIA:"{tmp_path / "voice preview.mp3"}"' in preview
+    assert captured["text"] == "The quick brown fox."
+    assert captured["model"] == "fish/s2-1-pro"
+    assert captured["voice"] == "03397b4c4be74759b72533b663fbd001"
+    assert captured["voice_provider"] == "fish"
+    assert captured["format"] == "mp3"
+    assert settings.speech_status() == before
 
 
 def test_control_center_displays_voice_name_instead_of_id(
@@ -253,8 +283,13 @@ def test_advanced_settings_and_defaults(
 def test_balance_and_topup(speech_pkg, hermes_home, sample_models, sample_voices):
     command, client = make_command(speech_pkg, sample_models, sample_voices)
     balance = command.handle("balance")
-    assert "$2.50" in balance
-    assert "$0.50" in balance
+    assert balance.splitlines() == [
+        "AllModels balance",
+        "",
+        "Status: ok",
+        "Spendable paid balance: $2.50",
+        "Promotional balance: $0.50",
+    ]
     assert "at most two decimal places" in command.handle("topup 4")
     link = command.handle("topup 25.50")
     assert "https://pay.example/test" in link
