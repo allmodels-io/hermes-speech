@@ -271,13 +271,12 @@ def test_update_commands_do_not_require_allmodels_account(
     speech_pkg, hermes_home, sample_models, sample_voices
 ):
     class Updates:
-        @staticmethod
-        def format_check():
-            return "Hermes Speech 0.2.0 is available"
+        calls = 0
 
         @staticmethod
-        def format_update():
-            return "Updated Hermes Speech from 0.1.0 to 0.2.0"
+        def format_check():
+            Updates.calls += 1
+            return "Hermes Speech 0.2.0 is available"
 
         @staticmethod
         def decorate_text(result):
@@ -286,8 +285,9 @@ def test_update_commands_do_not_require_allmodels_account(
     command, _ = make_command(speech_pkg, sample_models, sample_voices, key="")
     command.update_checker = Updates()
     assert "0.2.0 is available" in command.handle("update check")
-    assert "Updated Hermes Speech" in command.handle("update")
-    assert "Updated Hermes Speech" in command.handle("6")
+    assert "0.2.0 is available" in command.handle("update")
+    assert "0.2.0 is available" in command.handle("6")
+    assert Updates.calls == 3
 
 
 def test_tts_test_returns_media_directive(

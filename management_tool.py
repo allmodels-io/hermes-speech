@@ -12,7 +12,7 @@ from . import settings
 from .catalog import CatalogStore, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
-from .update_checker import PluginUpdateChecker
+from .update_checker import NEXT_ACTION, SUGGESTED_REQUEST, PluginUpdateChecker
 
 _LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 _RESULT_LIMIT = 10
@@ -24,10 +24,10 @@ MANAGEMENT_TOOL_SCHEMA = {
         "Manage an existing AllModels speech account and Hermes TTS/STT configuration. "
         "Use for status, model discovery and selection, compatible voice search and "
         "selection, non-mutating one-off voice previews, balance, top-up links, configured "
-        "TTS tests, speed, language, transcription prompts, and plugin update checks or "
-        "installation. This tool cannot sign up or "
+        "TTS tests, speed, language, transcription prompts, and read-only plugin update "
+        "checks. This tool cannot sign up or "
         "verify accounts; use allmodels_speech_setup for first-time setup. Load "
-        "manage-allmodels-speech with skill_view for the workflow."
+        "hermes-speech:manage-allmodels-speech with skill_view for the workflow."
     ),
     "parameters": {
         "type": "object",
@@ -49,12 +49,8 @@ MANAGEMENT_TOOL_SCHEMA = {
                     "set_language",
                     "set_prompt",
                     "check_update",
-                    "update_plugin",
                 ],
-                "description": (
-                    "The speech-management operation to perform. update_plugin requires an "
-                    "explicit user request and does not require an AllModels account."
-                ),
+                "description": "The speech-management operation to perform.",
             },
             "capability": {
                 "type": "string",
@@ -186,11 +182,15 @@ class AllModelsSpeechManagementTool:
         if action in {"check_update", "update_plugin"}:
             if self.update_checker is None:
                 return _result(success=False, error="update_support_unavailable")
-            result = (
-                self.update_checker.check_now()
-                if action == "check_update"
-                else self.update_checker.update_now()
-            )
+            result = self.update_checker.check_now()
+            if action == "update_plugin":
+                result.update(
+                    deprecated_action="update_plugin",
+                    updated=False,
+                    update_performed=False,
+                    next_action=NEXT_ACTION,
+                    suggested_request=SUGGESTED_REQUEST,
+                )
             return _result(**result)
 
         result = self._handle(args)
@@ -207,7 +207,8 @@ class AllModelsSpeechManagementTool:
                 error="account_required",
                 next_action="load_configure_allmodels_speech",
                 instruction=(
-                    "Load configure-allmodels-speech and use allmodels_speech_setup. "
+                    "Load hermes-speech:configure-allmodels-speech and use "
+                    "allmodels_speech_setup. "
                     "Do not attempt signup with this management tool."
                 ),
             )
@@ -285,7 +286,7 @@ class AllModelsSpeechManagementTool:
                 ),
                 instruction=(
                     "Ask whether the user wants to replace the account, then load "
-                    "configure-allmodels-speech. Do not request an API key."
+                    "hermes-speech:configure-allmodels-speech. Do not request an API key."
                 ),
             )
         voice_id = str(status.get("tts_voice") or "")

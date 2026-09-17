@@ -1,11 +1,10 @@
-"""Non-blocking release checks and explicit self-updates for hermes-speech."""
+"""Non-blocking, notification-only release checks for hermes-speech."""
 
 from __future__ import annotations
 
 import json
 import os
 import re
-import subprocess
 import tempfile
 import threading
 import time
@@ -21,6 +20,8 @@ RELEASES_API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60
 REMINDER_INTERVAL_SECONDS = 7 * 24 * 60 * 60
+NEXT_ACTION = "ask_agent_to_update_plugin"
+SUGGESTED_REQUEST = "Update the hermes-speech plugin."
 _CACHE_VERSION = 1
 _SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
@@ -54,28 +55,24 @@ def _manifest_version(path: Path) -> str:
 
 
 class PluginUpdateChecker:
-    """Profile-scoped release cache with notification and explicit update APIs."""
+    """Profile-scoped release cache that never modifies plugin source."""
 
     def __init__(
         self,
         *,
         plugin_dir: Optional[Path] = None,
         cache_path: Optional[Path] = None,
-        installed_path: Optional[Path] = None,
         request: Optional[Callable[..., Any]] = None,
         clock: Callable[[], float] = time.time,
         check_interval: float = CHECK_INTERVAL_SECONDS,
         reminder_interval: float = REMINDER_INTERVAL_SECONDS,
-        updater: Optional[Callable[[], Dict[str, Any]]] = None,
     ) -> None:
         self.plugin_dir = (plugin_dir or Path(__file__).resolve().parent).resolve()
         self._cache_path_override = cache_path
-        self._installed_path_override = installed_path
         self._request = request or httpx.get
         self._clock = clock
         self.check_interval = check_interval
         self.reminder_interval = reminder_interval
-        self._updater = updater or self._update_git_install
         self._lock = threading.RLock()
         self._loaded_path: Optional[Path] = None
         self._cache: Dict[str, Any] = {}
@@ -91,13 +88,6 @@ class PluginUpdateChecker:
         from hermes_constants import get_hermes_home
 
         return get_hermes_home() / "cache" / "hermes-speech" / "update.json"
-
-    def _installed_path(self) -> Path:
-        if self._installed_path_override is not None:
-            return self._installed_path_override
-        from hermes_constants import get_hermes_home
-
-        return get_hermes_home() / "plugins" / PLUGIN_NAME
 
     @staticmethod
     def automatic_enabled() -> bool:
@@ -315,8 +305,11 @@ class PluginUpdateChecker:
             "current_version": status.get("current_version"),
             "latest_version": status.get("latest_version"),
             "release_url": status.get("release_url") or RELEASES_URL,
-            "update_command": "/speech update",
-            "restart_required": True,
+            "update_available": True,
+            "update_performed": False,
+            "next_action": NEXT_ACTION,
+            "suggested_request": SUGGESTED_REQUEST,
+            "restart_required_after_update": True,
         }
 
     def decorate_json(self, raw_result: str) -> str:
@@ -339,7 +332,8 @@ class PluginUpdateChecker:
         return (
             f"{result}\n\n"
             f"Hermes Speech update available: {notice['current_version']} → "
-            f"{notice['latest_version']}. Run `/speech update`, then restart Hermes.\n"
+            f"{notice['latest_version']}. Ask your Hermes agent: "
+            f"\"{notice['suggested_request']}\"\n"
             f"Release: {notice['release_url']}"
         )
 
@@ -353,144 +347,7 @@ class PluginUpdateChecker:
             return (
                 f"Hermes Speech {status['latest_version']} is available "
                 f"(installed: {status['current_version']}).\n"
-                "Run `/speech update` to install it.\n"
+                f"Ask your Hermes agent: \"{SUGGESTED_REQUEST}\"\n"
                 f"Release: {status['release_url']}"
             )
         return f"Hermes Speech is up to date (version {status['current_version']})."
-
-    def update_now(self) -> Dict[str, Any]:
-        status = self.check_now()
-        if not status.get("success"):
-            return status
-        if not status.get("update_available"):
-            return {
-                "success": True,
-                "updated": False,
-                "current_version": status["current_version"],
-                "latest_version": status["latest_version"],
-                "restart_required": False,
-            }
-        result = self._updater()
-        if not result.get("success"):
-            result.setdefault("current_version", status["current_version"])
-            result.setdefault("latest_version", status["latest_version"])
-            result.setdefault("release_url", status.get("release_url") or RELEASES_URL)
-            return result
-        installed_version = str(result.get("installed_version") or self.current_version)
-        if _is_newer(status["latest_version"], installed_version):
-            return {
-                "success": False,
-                "error": "updated_checkout_does_not_contain_latest_release",
-                "current_version": installed_version,
-                "latest_version": status["latest_version"],
-                "release_url": status.get("release_url") or RELEASES_URL,
-            }
-        with self._lock:
-            cache = self._load_locked()
-            cache["notified_version"] = status["latest_version"]
-            cache["notified_at"] = self._clock()
-            try:
-                self._write_locked()
-            except OSError:
-                pass
-        return {
-            "success": True,
-            "updated": True,
-            "previous_version": status["current_version"],
-            "installed_version": installed_version,
-            "restart_required": True,
-            "instruction": "Restart Hermes to load the updated plugin.",
-        }
-
-    def format_update(self) -> str:
-        result = self.update_now()
-        if result.get("success") and result.get("updated"):
-            return (
-                f"Updated Hermes Speech from {result['previous_version']} to "
-                f"{result['installed_version']}.\n\nRestart Hermes to load the new version."
-            )
-        if result.get("success"):
-            return f"Hermes Speech is already up to date (version {result['current_version']})."
-        errors = {
-            "development_symlink": (
-                "This is a linked development installation, so `/speech update` will not "
-                "modify its source. Update the linked checkout and restart Hermes."
-            ),
-            "not_git_install": (
-                "This Hermes Speech installation is not a Git checkout and cannot update "
-                f"itself. Reinstall it from {RELEASES_URL}."
-            ),
-            "local_changes": (
-                "Hermes Speech has local changes, so the update was refused to avoid "
-                "overwriting them. Commit or remove those changes, then try again."
-            ),
-            "unexpected_remote": (
-                "Hermes Speech was installed from a different Git remote. Update that "
-                "checkout manually rather than replacing its source."
-            ),
-            "no_published_release": f"No stable Hermes Speech release is published yet.\n{RELEASES_URL}",
-            "update_check_failed": "Hermes Speech could not check for updates. Try again later.",
-            "plugin_update_failed": "Hermes could not update the plugin. Run `hermes plugins update hermes-speech` for details.",
-            "mismatched_install": (
-                "The active Hermes Speech code does not match the profile's installed plugin. "
-                "Restart Hermes from the intended profile before updating."
-            ),
-            "updated_checkout_does_not_contain_latest_release": (
-                "The Git checkout updated, but it does not contain the latest published "
-                f"version. See {result.get('release_url') or RELEASES_URL}."
-            ),
-        }
-        return errors.get(str(result.get("error") or ""), "Hermes Speech could not update itself.")
-
-    @staticmethod
-    def _official_remote(value: str) -> bool:
-        normalized = value.strip().lower().removesuffix(".git").removesuffix("/")
-        return normalized in {
-            "git@github.com:allmodels-io/hermes-speech",
-            "https://github.com/allmodels-io/hermes-speech",
-            "ssh://git@github.com/allmodels-io/hermes-speech",
-        }
-
-    def _git_output(self, target: Path, *args: str) -> Optional[str]:
-        try:
-            completed = subprocess.run(
-                ["git", *args],
-                cwd=str(target),
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-        return completed.stdout.strip() if completed.returncode == 0 else None
-
-    def _update_git_install(self) -> Dict[str, Any]:
-        target = self._installed_path()
-        if target.is_symlink():
-            return {"success": False, "error": "development_symlink", "source_path": str(target.resolve())}
-        if not target.is_dir() or not (target / ".git").exists():
-            return {"success": False, "error": "not_git_install"}
-        if target.resolve() != self.plugin_dir:
-            return {"success": False, "error": "mismatched_install"}
-        dirty = self._git_output(target, "status", "--porcelain")
-        if dirty is None:
-            return {"success": False, "error": "plugin_update_failed"}
-        if dirty:
-            return {"success": False, "error": "local_changes"}
-        remote = self._git_output(target, "remote", "get-url", "origin")
-        if remote is None or not self._official_remote(remote):
-            return {"success": False, "error": "unexpected_remote"}
-
-        from hermes_cli.plugins_cmd import dashboard_update_user_plugin
-
-        result = dashboard_update_user_plugin(PLUGIN_NAME)
-        if not result.get("ok"):
-            return {"success": False, "error": "plugin_update_failed"}
-        return {
-            "success": True,
-            "installed_version": _manifest_version(target / "plugin.yaml"),
-            "unchanged": bool(result.get("unchanged")),
-        }

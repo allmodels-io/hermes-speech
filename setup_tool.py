@@ -30,7 +30,7 @@ SETUP_TOOL_SCHEMA = {
         "if no account exists, request their email and start signup. When an already-authorized "
         "email search integration is available, retrieve the newest verification code from "
         "noreply@allmodels.io; otherwise ask the user for it. Verification automatically installs balanced TTS/STT defaults. "
-        "Load configure-allmodels-speech with skill_view for the full workflow."
+        "Load hermes-speech:configure-allmodels-speech with skill_view for the full workflow."
     ),
     "parameters": {
         "type": "object",
@@ -139,7 +139,7 @@ class AllModelsSpeechSetupTool:
                 configured=False,
                 next_action="start_signup",
                 needs="email",
-                workflow_skill="configure-allmodels-speech",
+                workflow_skill="hermes-speech:configure-allmodels-speech",
                 instruction=(
                     "Stop setup work and ask only for the user's email. Do not configure "
                     "Edge/local speech and do not install packages."
@@ -167,7 +167,7 @@ class AllModelsSpeechSetupTool:
             configured=configured,
             selections=self._public_status(status, catalog),
             next_action="done" if configured else "configure_defaults",
-            workflow_skill="configure-allmodels-speech",
+            workflow_skill="hermes-speech:configure-allmodels-speech",
             instruction=(
                 "Report the selections if setup is done; otherwise call configure_defaults. "
                 "Do not configure an alternative speech provider."

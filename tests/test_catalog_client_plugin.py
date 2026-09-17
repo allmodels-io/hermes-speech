@@ -195,11 +195,24 @@ def test_voice_search_normalizes_rich_rows_but_caches_only_compact_metadata(
 
 
 def test_plugin_registers_command_and_both_providers(speech_pkg, hermes_home):
+    from hermes_cli.config import read_raw_config, save_config
+
+    existing = hermes_home / "team-skills"
+    existing.mkdir()
+    save_config(
+        {
+            "model": {"provider": "xai", "default": "grok-4"},
+            "skills": {"external_dirs": [str(existing)]},
+        },
+        strip_defaults=False,
+    )
+    config_before = read_raw_config()
     registered = {
         "tts": [],
         "stt": [],
         "commands": [],
         "tools": [],
+        "skills": [],
     }
 
     class Context:
@@ -215,6 +228,9 @@ def test_plugin_registers_command_and_both_providers(speech_pkg, hermes_home):
         def register_tool(self, **kwargs):
             registered["tools"].append(kwargs)
 
+        def register_skill(self, name, path, **kwargs):
+            registered["skills"].append((name, Path(path), kwargs))
+
     speech_pkg.register(Context())
     assert [provider.name for provider in registered["tts"]] == ["allmodels"]
     assert [provider.name for provider in registered["stt"]] == ["allmodels"]
@@ -226,63 +242,33 @@ def test_plugin_registers_command_and_both_providers(speech_pkg, hermes_home):
     assert registered["tools"][1]["name"] == "allmodels_speech_manage"
     assert registered["tools"][1]["toolset"] == "allmodels_speech"
     assert "requires_env" not in registered["tools"][1]
+    assert [name for name, _path, _kwargs in registered["skills"]] == [
+        "configure-allmodels-speech",
+        "manage-allmodels-speech",
+    ]
+    assert all(path.is_file() for _name, path, _kwargs in registered["skills"])
     from tools.tts_streaming import _REGISTRY
 
     assert "allmodels" in _REGISTRY
-    from hermes_cli.config import read_raw_config
-
-    external_dirs = read_raw_config()["skills"]["external_dirs"]
-    assert external_dirs == [str(Path(speech_pkg.__file__).resolve().parent / "skills")]
+    assert read_raw_config() == config_before
 
 
-def test_skill_discovery_registration_is_idempotent_and_preserves_config(
-    speech_pkg, hermes_home
-):
-    from hermes_cli.config import read_raw_config, save_config
-    from hermes_speech_testpkg.skill_discovery import ensure_skill_discovery
+def test_manifest_declares_registered_capabilities_and_compatibility(speech_pkg):
+    import yaml
 
-    existing = hermes_home / "team-skills"
-    existing.mkdir()
-    save_config(
-        {
-            "model": {"provider": "xai", "default": "grok-4"},
-            "skills": {"external_dirs": [str(existing)]},
-        },
-        strip_defaults=False,
-    )
+    root = Path(speech_pkg.__file__).resolve().parent
+    manifest = yaml.safe_load((root / "plugin.yaml").read_text(encoding="utf-8"))
 
-    plugin_skills = Path(speech_pkg.__file__).resolve().parent / "skills"
-    assert ensure_skill_discovery(plugin_skills)
-    assert ensure_skill_discovery(plugin_skills)
-
-    config = read_raw_config()
-    assert config["model"] == {"provider": "xai", "default": "grok-4"}
-    assert config["skills"]["external_dirs"] == [
-        str(existing),
-        str(plugin_skills),
+    assert manifest["manifest_version"] == 1
+    assert manifest["version"] == "0.3.0"
+    assert manifest["requires_hermes"] == ">=0.20.0"
+    assert manifest["requires_env"] == []
+    assert manifest["provides_tools"] == [
+        "allmodels_speech_setup",
+        "allmodels_speech_manage",
     ]
-
-
-def test_bundled_skills_remain_indexed_when_plugin_tools_are_deferred(
-    speech_pkg, hermes_home
-):
-    from agent.prompt_builder import build_skills_system_prompt
-    from agent.skill_utils import _external_dirs_cache_clear
-    from hermes_speech_testpkg.skill_discovery import ensure_skill_discovery
-
-    plugin_skills = Path(speech_pkg.__file__).resolve().parent / "skills"
-    assert ensure_skill_discovery(plugin_skills)
-    _external_dirs_cache_clear()
-
-    deferred = build_skills_system_prompt(
-        available_tools={"tool_search", "tool_describe", "tool_call"},
-        available_toolsets={"tools"},
-    )
-
-    assert "configure-allmodels-speech" in deferred
-    assert "Set up AllModels as Hermes' native text-to-speech" in deferred
-    assert "manage-allmodels-speech" in deferred
-    assert "Manage an existing AllModels speech account" in deferred
+    assert manifest["provides_hooks"] == []
+    assert manifest["provides_middleware"] == []
 
 
 def test_setup_skill_has_no_template_placeholders(speech_pkg):
@@ -303,3 +289,5 @@ def test_setup_skill_has_no_template_placeholders(speech_pkg):
     assert "requires_tools:" not in management
     assert "tool_describe" in management
     assert "tool_call" in management
+    assert "hermes plugins update hermes-speech" in management
+    assert "update_plugin" not in management

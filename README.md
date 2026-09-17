@@ -34,7 +34,7 @@ user-facing walkthrough.
 - **Streaming-aware speech** — supported models use streaming TTS; other models
   automatically retain Hermes' synchronous sentence pipeline.
 - **Speech management** — change models and voices, tune speed and transcription,
-  check balance, create top-up links, test audio, and update the plugin.
+  check balance, create top-up links, test audio, and check for plugin updates.
 - **No additional pip install** — it uses the OpenAI and HTTP clients already
   bundled with Hermes.
 
@@ -89,12 +89,13 @@ Find elon's voice and use it.
 
 ## Conversational speech setup and management
 
-With the plugin enabled, unqualified setup requests such as `Set up speech`,
-`Configure TTS and STT`, or `Get voice working` match the bundled skill by its
-normal Hermes skill description. Hermes then loads that skill with `skill_view`
-and follows the AllModels workflow. There is no per-message intent hook or fixed
-sentence list. Explicit requests for local, offline, Edge, Whisper, or another
-named provider remain with Hermes' built-in setup.
+With the plugin enabled, its setup and management tools direct Hermes to the
+bundled, namespaced skills
+`hermes-speech:configure-allmodels-speech` and
+`hermes-speech:manage-allmodels-speech`. Hermes loads the applicable workflow
+with `skill_view`. There is no per-message intent hook or fixed sentence list.
+Explicit requests for local, offline, Edge, Whisper, or another named provider
+remain with Hermes' built-in setup.
 
 Hermes checks the current setup, asks for an email and the single-use code only
 when needed, and installs balanced TTS/STT defaults. By default it selects
@@ -106,9 +107,9 @@ The setup tool never requires an API key as an argument and never returns one.
 
 After setup, management is conversational too. Requests such as `Find a warmer
 voice`, `Switch my STT model`, `Check my AllModels balance`, or `Create a $25
-top-up link` discover `manage-allmodels-speech`. Its agent-facing tool uses the
-same client, catalog, provider, and settings implementation as the `/speech`
-interface; it does not perform signup.
+top-up link` use `hermes-speech:manage-allmodels-speech`. Its agent-facing tool
+uses the same client, catalog, provider, and settings implementation as the
+`/speech` interface; it does not perform signup.
 
 Voice search uses the [AllModels voice catalogue API](https://docs.allmodels.io/voices)
 directly. Natural-language queries such as `British female narrator` are ranked
@@ -143,7 +144,6 @@ Useful direct commands:
 /speech advanced speed 1.1
 /speech advanced language ja
 /speech advanced prompt Product names: Hermes, AllModels
-/speech update check
 /speech update
 ```
 
@@ -172,12 +172,12 @@ Models and availability change over time; the
 
 ## Configuration
 
-The plugin adds its bundled `skills/` directory to the active profile's
-`skills.external_dirs`, which makes the workflow part of Hermes' normal skill
-index. The skills discover the plugin's setup and management tools directly or
-through Hermes' deferred tool search. Speech setup writes only its relevant keys
-in `config.yaml`. The API key is stored in the profile's protected `.env` as
-`ALLMODELS_API_KEY`; it is never displayed after signup.
+The plugin registers its bundled workflows with Hermes as read-only, namespaced
+plugin skills. It does not modify `skills.external_dirs` or any other discovery
+configuration. The skills use the plugin's setup and management tools directly
+or through Hermes' deferred tool search. Speech setup writes only its relevant
+keys in `config.yaml`. The API key is stored in the profile's protected `.env`
+as `ALLMODELS_API_KEY`; it is never displayed after signup.
 
 The model catalogue refreshes automatically in the background. Voice discovery
 uses live text search with compact stale-cache fallback. There is no manual
@@ -195,10 +195,12 @@ plugins:
     update_check: false
 ```
 
-Automatic checks only notify. `/speech update` or an explicit conversational
-request such as `Update Hermes Speech` performs the update and then asks for a
-Hermes restart. Linked development installs, non-Git copies, unexpected Git
-remotes, and checkouts with local changes are never modified automatically.
+Automatic checks only notify. `/speech update` performs the same read-only
+release check and, when a release is available, asks the user to request a
+host-managed update from their agent. An explicit conversational request such
+as `Update the hermes-speech plugin` uses Hermes' normal
+`hermes plugins update hermes-speech` path. The plugin never modifies its own
+source files.
 
 ## Support
 

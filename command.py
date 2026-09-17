@@ -132,8 +132,8 @@ class SpeechCommand:
             if len(parts) > 1 and parts[1].lower() == "check":
                 return self.update_checker.format_check()
             if len(parts) > 1:
-                return "Use `/speech update` to install, or `/speech update check` to check only."
-            return self.update_checker.format_update()
+                return "Use `/speech update` to check for a newer Hermes Speech release."
+            return self.update_checker.format_check()
 
         result = self._handle(raw_args)
         if self.update_checker is not None:
@@ -300,7 +300,7 @@ class SpeechCommand:
                 "3. Account — `/speech account`",
                 "4. Test TTS — `/speech test <text>`",
                 "5. Advanced — `/speech advanced`",
-                "6. Update plugin — `/speech update`",
+                "6. Check plugin update — `/speech update`",
             ]
         )
         return "\n".join(lines)

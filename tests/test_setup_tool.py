@@ -29,7 +29,7 @@ def test_status_requests_email_without_requiring_credentials(
         "needs": "email",
         "next_action": "start_signup",
         "success": True,
-        "workflow_skill": "configure-allmodels-speech",
+        "workflow_skill": "hermes-speech:configure-allmodels-speech",
     }
 
 

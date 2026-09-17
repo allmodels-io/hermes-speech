@@ -1,5 +1,20 @@
+manifest_version: 1
 name: hermes-speech
-version: 0.2.0
+version: 0.3.0
 description: "Conversational and slash-command AllModels TTS/STT setup with native Hermes speech providers."
 author: AllModels
 kind: standalone
+requires_hermes: ">=0.20.0"
+requires_env: []
+provides_tools:
+  - allmodels_speech_setup
+  - allmodels_speech_manage
+provides_hooks: []
+provides_middleware: []
+license: MIT
+homepage: https://github.com/allmodels-io/hermes-speech
+tags:
+  - speech
+  - tts
+  - stt
+  - voice

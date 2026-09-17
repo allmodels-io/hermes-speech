@@ -1,11 +1,11 @@
 ---
 name: manage-allmodels-speech
-description: Manage an existing AllModels speech account, Hermes speech configuration, and the Hermes Speech plugin installation. Use when the user wants to inspect or change TTS/STT models, find or select voices by name or qualities, preview a voice without changing saved settings, check balance or promotional grants, create a top-up link, test configured speech, change TTS speed, override STT language, set or clear an STT prompt, check for a Hermes Speech update, or explicitly update the plugin. Prefer this skill for an unqualified voice-management request when Hermes is already configured with AllModels. Do not use for signup, verification, first-time setup, replacing an account, an explicit request for Edge or another named provider, or merely toggling voice mode.
+description: Manage an existing AllModels speech account, Hermes speech configuration, and read-only Hermes Speech update checks. Use when the user wants to inspect or change TTS/STT models, find or select voices by name or qualities, preview a voice without changing saved settings, check balance or promotional grants, create a top-up link, test configured speech, change TTS speed, override STT language, set or clear an STT prompt, check for a Hermes Speech update, or explicitly asks the agent to update the plugin through Hermes. Prefer this skill for an unqualified voice-management request when Hermes is already configured with AllModels. Do not use for signup, verification, first-time setup, replacing an account, an explicit request for Edge or another named provider, or merely toggling voice mode.
 ---
 
 # Manage AllModels Speech
 
-Use `allmodels_speech_manage` for every operation. Do not call AllModels directly, edit Hermes configuration manually, or invoke `/speech` through the terminal.
+Use `allmodels_speech_manage` for speech-account and configuration operations. The only exception is an explicit request to apply a plugin update, which uses Hermes' host-managed `hermes plugins update hermes-speech` command. Do not call AllModels directly, edit Hermes configuration manually, or invoke `/speech` through the terminal.
 
 ## Tool access
 
@@ -19,15 +19,16 @@ Do not substitute generic `text_to_speech`, terminal configuration edits, Edge, 
 ## Account and status
 
 - Call `get_status` when the current selection or advanced settings matter.
-- If any action returns `account_required`, stop management and load `configure-allmodels-speech` for first-time setup. Never perform signup in this workflow.
+- If any action returns `account_required`, stop management and load `hermes-speech:configure-allmodels-speech` for first-time setup. Never perform signup in this workflow.
 - Call `get_balance` for paid balance, promotional balance, and applicable grants.
 - For a top-up, obtain the amount, then call `create_topup_link`. Return the secure URL without opening it. Creating a link does not itself charge the user.
 
 ## Plugin updates
 
 - Call `check_update` for a read-only request to check the latest stable GitHub Release.
-- Call `update_plugin` only when the user explicitly asks to install or apply an update. Do not infer installation permission from a status check or an automatic `plugin_update` notice.
-- Report whether the plugin was current or updated. After a successful update, tell the user to restart Hermes; do not attempt hot reload.
+- `/speech update` and `check_update` only check for a release; neither installs or modifies plugin files.
+- If the user explicitly asks the agent to apply an available update, run `hermes plugins update hermes-speech` through the terminal. This is the only supported update path. Do not infer installation permission from a status check or an automatic `plugin_update` notice.
+- Report whether the plugin was current or whether the host-managed command updated it. After a successful update, tell the user to restart Hermes; do not attempt hot reload.
 - If any ordinary tool result contains `plugin_update`, mention the available version briefly after completing the user's requested operation. Do not interrupt signup or replace the requested result with the notice.
 
 ## Models
@@ -57,7 +58,7 @@ Do not substitute generic `text_to_speech`, terminal configuration edits, Edge, 
 ## Guardrails
 
 - Never request, display, or manipulate the AllModels API key.
-- Never run Git commands or modify plugin files directly; use `check_update` or `update_plugin`.
+- Never run Git commands or modify plugin files directly. Use `check_update` to inspect releases and `hermes plugins update hermes-speech` for an explicitly requested host-managed update.
 - Never use this skill for signup, verification, or account replacement.
 - Never select a partial model or incompatible voice match.
 - Keep output format unchanged; the plugin preserves the configured format or normal MP3 default.

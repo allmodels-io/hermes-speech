@@ -31,12 +31,15 @@ def test_management_requires_existing_account(
     assert result["next_action"] == "load_configure_allmodels_speech"
 
 
-def test_update_actions_do_not_require_allmodels_account(
+def test_update_checks_do_not_require_allmodels_account_and_legacy_action_is_read_only(
     speech_pkg, hermes_home, sample_models, sample_voices
 ):
     class Updates:
+        calls = 0
+
         @staticmethod
         def check_now():
+            Updates.calls += 1
             return {
                 "success": True,
                 "current_version": "0.1.0",
@@ -44,22 +47,16 @@ def test_update_actions_do_not_require_allmodels_account(
                 "update_available": True,
             }
 
-        @staticmethod
-        def update_now():
-            return {
-                "success": True,
-                "updated": True,
-                "previous_version": "0.1.0",
-                "installed_version": "0.2.0",
-                "restart_required": True,
-            }
-
     tool, _ = make_tool(speech_pkg, sample_models, sample_voices, key="")
     tool.update_checker = Updates()
     assert call(tool, "check_update")["update_available"] is True
-    updated = call(tool, "update_plugin")
-    assert updated["installed_version"] == "0.2.0"
-    assert updated["restart_required"] is True
+    legacy = call(tool, "update_plugin")
+    assert legacy["deprecated_action"] == "update_plugin"
+    assert legacy["updated"] is False
+    assert legacy["update_performed"] is False
+    assert legacy["next_action"] == "ask_agent_to_update_plugin"
+    assert legacy["suggested_request"] == "Update the hermes-speech plugin."
+    assert Updates.calls == 2
 
 
 def test_status_uses_human_readable_voice_name(
@@ -324,4 +321,6 @@ def test_management_schema_excludes_signup_and_api_keys(speech_pkg):
     actions = properties["action"]["enum"]
     assert not any("signup" in action or "verify" in action for action in actions)
     assert "preview_voice" in actions
+    assert "check_update" in actions
+    assert "update_plugin" not in actions
     assert "api_key" not in properties

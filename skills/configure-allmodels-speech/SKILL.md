@@ -36,4 +36,4 @@ Do not substitute terminal commands or another speech provider. If neither the d
 - Do not change speech format, language, prompt, speed, or unrelated Hermes settings during default setup.
 - Do not install `faster-whisper`, `edge-tts`, or any other dependency during this workflow.
 - Use email access only to retrieve the matching recent verification code; do not summarize or expose unrelated messages.
-- For later model, voice, billing, testing, or advanced tuning requests, load `manage-allmodels-speech` and use `allmodels_speech_manage`.
+- For later model, voice, billing, testing, or advanced tuning requests, load `hermes-speech:manage-allmodels-speech` and use `allmodels_speech_manage`.

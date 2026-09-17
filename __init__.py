@@ -15,13 +15,20 @@ def register(ctx) -> None:
     from .client import AllModelsClient
     from .command import SpeechCommand
     from .management_tool import MANAGEMENT_TOOL_SCHEMA, AllModelsSpeechManagementTool
-    from .providers import AllModelsTTSProvider, AllModelsTranscriptionProvider
-    from .skill_discovery import ensure_skill_discovery
+    from .providers import AllModelsTranscriptionProvider, AllModelsTTSProvider
     from .setup_tool import SETUP_TOOL_SCHEMA, AllModelsSpeechSetupTool
     from .streaming import register_allmodels_streaming_provider
     from .update_checker import PluginUpdateChecker
 
-    ensure_skill_discovery(Path(__file__).resolve().parent / "skills")
+    skills_dir = Path(__file__).resolve().parent / "skills"
+    ctx.register_skill(
+        "configure-allmodels-speech",
+        skills_dir / "configure-allmodels-speech" / "SKILL.md",
+    )
+    ctx.register_skill(
+        "manage-allmodels-speech",
+        skills_dir / "manage-allmodels-speech" / "SKILL.md",
+    )
 
     client = AllModelsClient()
     catalog = CatalogStore(client)
