@@ -12,7 +12,12 @@ from . import settings
 from .catalog import CatalogStore, voice_display_name
 from .client import AllModelsAPIError, AllModelsClient
 from .providers import AllModelsTTSProvider, _eligible_models
-from .update_checker import NEXT_ACTION, SUGGESTED_REQUEST, PluginUpdateChecker
+from .update_checker import (
+    NEXT_ACTION,
+    RESTART_INSTRUCTION,
+    SUGGESTED_REQUEST,
+    PluginUpdateChecker,
+)
 
 _LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 _RESULT_LIMIT = 10
@@ -183,6 +188,13 @@ class AllModelsSpeechManagementTool:
             if self.update_checker is None:
                 return _result(success=False, error="update_support_unavailable")
             result = self.update_checker.check_now()
+            if result.get("update_available"):
+                result.update(
+                    next_action=NEXT_ACTION,
+                    suggested_request=SUGGESTED_REQUEST,
+                    restart_required_after_update=True,
+                    restart_instruction=RESTART_INSTRUCTION,
+                )
             if action == "update_plugin":
                 result.update(
                     deprecated_action="update_plugin",

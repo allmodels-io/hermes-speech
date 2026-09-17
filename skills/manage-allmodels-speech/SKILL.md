@@ -29,7 +29,7 @@ Do not substitute generic `text_to_speech`, terminal configuration edits, Edge, 
 - `/speech update` and `check_update` only check for a release; neither installs or modifies plugin files.
 - If the user explicitly asks the agent to apply an available update, run `hermes plugins update hermes-speech` through the terminal. This is the only supported update path. Do not infer installation permission from a status check or an automatic `plugin_update` notice.
 - Report whether the plugin was current or whether the host-managed command updated it. After a successful update, tell the user to restart Hermes; do not attempt hot reload.
-- If any ordinary tool result contains `plugin_update`, mention the available version briefly after completing the user's requested operation. Do not interrupt signup or replace the requested result with the notice.
+- If `check_update` or any ordinary tool result reports an available update, mention the available version and tell the user to restart the Hermes gateway after the update completes. Do not interrupt signup or replace the requested result with the notice.
 
 ## Models
 

@@ -49,13 +49,21 @@ def test_update_checks_do_not_require_allmodels_account_and_legacy_action_is_rea
 
     tool, _ = make_tool(speech_pkg, sample_models, sample_voices, key="")
     tool.update_checker = Updates()
-    assert call(tool, "check_update")["update_available"] is True
+    check = call(tool, "check_update")
+    assert check["update_available"] is True
+    assert check["restart_required_after_update"] is True
+    assert check["restart_instruction"] == (
+        "After the update completes, restart the Hermes gateway."
+    )
     legacy = call(tool, "update_plugin")
     assert legacy["deprecated_action"] == "update_plugin"
     assert legacy["updated"] is False
     assert legacy["update_performed"] is False
     assert legacy["next_action"] == "ask_agent_to_update_plugin"
     assert legacy["suggested_request"] == "Update the hermes-speech plugin."
+    assert legacy["restart_instruction"] == (
+        "After the update completes, restart the Hermes gateway."
+    )
     assert Updates.calls == 2
 
 

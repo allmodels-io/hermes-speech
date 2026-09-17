@@ -198,8 +198,9 @@ plugins:
 
 Automatic checks only notify. `/speech update` performs the same read-only
 release check and, when a release is available, asks the user to request a
-host-managed update from their agent. An explicit conversational request such
-as `Update the hermes-speech plugin` uses Hermes' normal
+host-managed update from their agent and reminds them to restart the Hermes
+gateway after the update completes. An explicit conversational request such as
+`Update the hermes-speech plugin` uses Hermes' normal
 `hermes plugins update hermes-speech` path. The plugin never modifies its own
 source files.
 

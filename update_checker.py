@@ -22,6 +22,7 @@ CHECK_INTERVAL_SECONDS = 24 * 60 * 60
 REMINDER_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 NEXT_ACTION = "ask_agent_to_update_plugin"
 SUGGESTED_REQUEST = "Update the hermes-speech plugin."
+RESTART_INSTRUCTION = "After the update completes, restart the Hermes gateway."
 _CACHE_VERSION = 1
 _SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
@@ -310,6 +311,7 @@ class PluginUpdateChecker:
             "next_action": NEXT_ACTION,
             "suggested_request": SUGGESTED_REQUEST,
             "restart_required_after_update": True,
+            "restart_instruction": RESTART_INSTRUCTION,
         }
 
     def decorate_json(self, raw_result: str) -> str:
@@ -334,6 +336,7 @@ class PluginUpdateChecker:
             f"Hermes Speech update available: {notice['current_version']} → "
             f"{notice['latest_version']}. Ask your Hermes agent: "
             f"\"{notice['suggested_request']}\"\n"
+            f"{notice['restart_instruction']}\n"
             f"Release: {notice['release_url']}"
         )
 
@@ -348,6 +351,7 @@ class PluginUpdateChecker:
                 f"Hermes Speech {status['latest_version']} is available "
                 f"(installed: {status['current_version']}).\n"
                 f"Ask your Hermes agent: \"{SUGGESTED_REQUEST}\"\n"
+                f"{RESTART_INSTRUCTION}\n"
                 f"Release: {status['release_url']}"
             )
         return f"Hermes Speech is up to date (version {status['current_version']})."

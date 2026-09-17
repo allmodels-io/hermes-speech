@@ -120,6 +120,9 @@ def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
     assert notice["next_action"] == "ask_agent_to_update_plugin"
     assert notice["suggested_request"] == "Update the hermes-speech plugin."
     assert notice["restart_required_after_update"] is True
+    assert notice["restart_instruction"] == (
+        "After the update completes, restart the Hermes gateway."
+    )
     assert "update_command" not in notice
     assert checker.maybe_notification() is None
     assert calls == 1
@@ -263,6 +266,7 @@ def test_explicit_check_never_modifies_plugin_source(
     }
 
     assert "Ask your Hermes agent" in message
+    assert "restart the Hermes gateway" in message
     assert before == after
 
 
@@ -282,6 +286,9 @@ def test_json_decoration_never_overwrites_tool_result(
     assert payload["balance"] == "2.00"
     assert payload["plugin_update"]["latest_version"] == "0.2.0"
     assert payload["plugin_update"]["update_performed"] is False
+    assert payload["plugin_update"]["restart_instruction"] == (
+        "After the update completes, restart the Hermes gateway."
+    )
 
 
 def test_prerelease_is_not_accepted_as_latest_stable_release(
