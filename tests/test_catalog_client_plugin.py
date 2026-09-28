@@ -216,6 +216,9 @@ def test_plugin_registers_command_and_both_providers(speech_pkg, hermes_home):
     }
 
     class Context:
+        class manifest:
+            version = "0.3.3"
+
         def register_tts_provider(self, provider):
             registered["tts"].append(provider)
 
@@ -260,7 +263,8 @@ def test_manifest_declares_registered_capabilities_and_compatibility(speech_pkg)
     manifest = yaml.safe_load((root / "plugin.yaml").read_text(encoding="utf-8"))
 
     assert manifest["manifest_version"] == 1
-    assert manifest["version"] == "0.3.2"
+    assert manifest["version"] == "0.3.3"
+    assert speech_pkg.PLUGIN_VERSION == manifest["version"]
     assert manifest["requires_hermes"] == ">=0.20.0"
     assert manifest["requires_env"] == []
     assert manifest["provides_tools"] == [

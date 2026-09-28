@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import threading
-from pathlib import Path
 
 import httpx
 
@@ -40,18 +39,8 @@ class FakeResponse:
         }
 
 
-def plugin_dir(tmp_path: Path, version: str = "0.1.0") -> Path:
-    path = tmp_path / "source"
-    path.mkdir()
-    (path / "plugin.yaml").write_text(
-        f"name: hermes-speech\nversion: {version}\n",
-        encoding="utf-8",
-    )
-    return path
-
-
 def test_explicit_check_uses_stable_release_and_sends_no_user_data(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -62,9 +51,7 @@ def test_explicit_check_uses_stable_release_and_sends_no_user_data(
         captured["kwargs"] = kwargs
         return FakeResponse()
 
-    checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path), request=request, **update_checker_paths
-    )
+    checker = PluginUpdateChecker(request=request, **update_checker_paths)
     result = checker.check_now()
 
     assert result["update_available"] is True
@@ -79,7 +66,7 @@ def test_explicit_check_uses_stable_release_and_sends_no_user_data(
 
 
 def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -96,7 +83,6 @@ def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
         return FakeResponse()
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path),
         request=request,
         clock=lambda: now[0],
         check_interval=100,
@@ -137,7 +123,7 @@ def test_background_checks_coalesce_and_cached_notice_is_rate_limited(
 
 
 def test_failed_background_attempt_is_cached_for_the_check_interval(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
@@ -150,7 +136,6 @@ def test_failed_background_attempt_is_cached_for_the_check_interval(
         raise httpx.ConnectError("offline")
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path),
         request=request,
         clock=lambda: now[0],
         check_interval=100,
@@ -172,12 +157,11 @@ def test_failed_background_attempt_is_cached_for_the_check_interval(
 
 
 def test_offline_explicit_check_returns_stale_cached_release(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path),
         request=lambda *_args, **_kwargs: FakeResponse(),
         **update_checker_paths,
     )
@@ -197,7 +181,7 @@ def test_offline_explicit_check_returns_stale_cached_release(
 
 
 def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_cli.config import save_config
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
@@ -213,9 +197,7 @@ def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
         {"plugins": {"hermes-speech": {"update_check": False}}},
         strip_defaults=False,
     )
-    checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path), request=request, **update_checker_paths
-    )
+    checker = PluginUpdateChecker(request=request, **update_checker_paths)
     checker.start_background_check()
     assert checker.maybe_notification() is None
     assert calls == 0
@@ -224,14 +206,14 @@ def test_automatic_check_can_be_disabled_without_blocking_explicit_check(
 
 
 def test_explicit_check_is_current_when_release_matches_installed_version(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path, version="0.2.0"),
+        current_version="0.2.0",
         request=lambda *_args, **_kwargs: FakeResponse(),
-        **update_checker_paths,
+        cache_path=update_checker_paths["cache_path"],
     )
     result = checker.check_now()
 
@@ -245,7 +227,8 @@ def test_explicit_check_never_modifies_plugin_source(
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
-    source = plugin_dir(tmp_path)
+    source = tmp_path / "source"
+    source.mkdir()
     sentinel = source / "sentinel.txt"
     sentinel.write_text("unchanged", encoding="utf-8")
     before = {
@@ -254,7 +237,6 @@ def test_explicit_check_never_modifies_plugin_source(
         if path.is_file()
     }
     checker = PluginUpdateChecker(
-        plugin_dir=source,
         request=lambda *_args, **_kwargs: FakeResponse(),
         **update_checker_paths,
     )
@@ -271,12 +253,11 @@ def test_explicit_check_never_modifies_plugin_source(
 
 
 def test_json_decoration_never_overwrites_tool_result(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path),
         request=lambda *_args, **_kwargs: FakeResponse(),
         **update_checker_paths,
     )
@@ -292,12 +273,11 @@ def test_json_decoration_never_overwrites_tool_result(
 
 
 def test_prerelease_is_not_accepted_as_latest_stable_release(
-    speech_pkg, hermes_home, update_checker_paths, tmp_path
+    speech_pkg, hermes_home, update_checker_paths
 ):
     from hermes_speech_testpkg.update_checker import PluginUpdateChecker
 
     checker = PluginUpdateChecker(
-        plugin_dir=plugin_dir(tmp_path),
         request=lambda *_args, **_kwargs: FakeResponse(
             version="0.3.0-rc.1", prerelease=True
         ),

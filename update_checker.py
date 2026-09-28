@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import httpx
-import yaml
 
 PLUGIN_NAME = "hermes-speech"
 REPOSITORY = "allmodels-io/hermes-speech"
@@ -47,28 +46,20 @@ def _is_newer(candidate: str, current: str) -> bool:
     return candidate_parts[3] is None and current_parts[3] is not None
 
 
-def _manifest_version(path: Path) -> str:
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, ValueError, TypeError):
-        return "0.0.0"
-    return str(payload.get("version") or "0.0.0").strip()
-
-
 class PluginUpdateChecker:
     """Profile-scoped release cache that never modifies plugin source."""
 
     def __init__(
         self,
         *,
-        plugin_dir: Optional[Path] = None,
+        current_version: str,
         cache_path: Optional[Path] = None,
         request: Optional[Callable[..., Any]] = None,
         clock: Callable[[], float] = time.time,
         check_interval: float = CHECK_INTERVAL_SECONDS,
         reminder_interval: float = REMINDER_INTERVAL_SECONDS,
     ) -> None:
-        self.plugin_dir = (plugin_dir or Path(__file__).resolve().parent).resolve()
+        self._current_version = str(current_version or "").strip() or "0.0.0"
         self._cache_path_override = cache_path
         self._request = request or httpx.get
         self._clock = clock
@@ -81,7 +72,7 @@ class PluginUpdateChecker:
 
     @property
     def current_version(self) -> str:
-        return _manifest_version(self.plugin_dir / "plugin.yaml")
+        return self._current_version
 
     def _cache_path(self) -> Path:
         if self._cache_path_override is not None:

@@ -52,6 +52,7 @@ def update_checker_paths(hermes_home):
     """Keep update-checker state inside the test home, even across threads."""
     return {
         "cache_path": hermes_home / "cache" / "hermes-speech" / "update.json",
+        "current_version": "0.1.0",
     }
 
 

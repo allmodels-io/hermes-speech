@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 __all__ = ["register"]
+PLUGIN_VERSION = "0.3.3"
 
 
 def register(ctx) -> None:
@@ -34,7 +35,12 @@ def register(ctx) -> None:
     catalog = CatalogStore(client)
     tts = AllModelsTTSProvider(client, catalog)
     stt = AllModelsTranscriptionProvider(client, catalog)
-    updates = PluginUpdateChecker()
+    # The real PluginContext exposes the parsed manifest. Hermes's isolated
+    # catalog-validation context is intentionally narrower, so retain a
+    # tested fallback for that probe without parsing YAML ourselves.
+    manifest = getattr(ctx, "manifest", None)
+    current_version = getattr(manifest, "version", PLUGIN_VERSION)
+    updates = PluginUpdateChecker(current_version=current_version)
     register_allmodels_streaming_provider(client, catalog)
     command = SpeechCommand(client, catalog, tts, update_checker=updates)
     setup_tool = AllModelsSpeechSetupTool(client, catalog, update_checker=updates)
